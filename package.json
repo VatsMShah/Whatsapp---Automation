@@ -1,0 +1,22 @@
+{
+  "name": "traket-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Traket Transport WhatsApp chatbot - migrated from n8n to Node.js",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "tunnel": "npx ngrok http 3000"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "google-auth-library": "^9.14.1",
+    "google-spreadsheet": "^4.1.4"
+  }
+}
