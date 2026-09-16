@@ -147,149 +147,186 @@ function mapSupportToDB(jsRow) {
 
 // =====================================================================
 // API INTERFACE (Mirrors sheets.js)
+// In-memory fallback stores when Supabase is unreachable or paused
+const memoryStore = {
+  users_master: new Map(),
+  book_vehicle: new Map(),
+  provide_vehicle: new Map(),
+  support: new Map(),
+};
+
+// =====================================================================
+// API INTERFACE (Mirrors sheets.js)
 // =====================================================================
 
 /** Get all master session rows by phone number */
 async function getMasterRowsByPhone(phone) {
-  const client = getClient();
-  const { data, error } = await client
-    .from('users_master')
-    .select('*')
-    .eq('phone', phone);
+  try {
+    const client = getClient();
+    const { data, error } = await client
+      .from('users_master')
+      .select('*')
+      .eq('phone', phone);
 
-  if (error) {
-    logger.error('Failed to get master rows by phone', error);
-    throw error;
+    if (error) throw error;
+    return (data || []).map(mapMasterToJS);
+  } catch (err) {
+    logger.warn('Supabase getMasterRowsByPhone failed, using memory fallback:', err.message || err);
+    const rows = [];
+    for (const row of memoryStore.users_master.values()) {
+      if (row.phone === phone) {
+        rows.push(row);
+      }
+    }
+    return rows;
   }
-
-  return (data || []).map(mapMasterToJS);
 }
 
 /** Save or update master session row */
 async function saveMasterSession(row) {
-  const client = getClient();
-  const dbRow = mapMasterToDB(row);
+  // Always update memory store
+  memoryStore.users_master.set(row.user_id, row);
 
-  const { data, error } = await client
-    .from('users_master')
-    .upsert(dbRow)
-    .select();
+  try {
+    const client = getClient();
+    const dbRow = mapMasterToDB(row);
 
-  if (error) {
-    logger.error('Failed to save master session', error);
-    throw error;
+    const { data, error } = await client
+      .from('users_master')
+      .upsert(dbRow)
+      .select();
+
+    if (error) throw error;
+
+    logger.info('Saved master session in Supabase', { user_id: row.user_id });
+    return data && data.length > 0 ? mapMasterToJS(data[0]) : row;
+  } catch (err) {
+    logger.warn('Supabase saveMasterSession failed, saved to memory store:', err.message || err);
+    return row;
   }
-
-  logger.info('Saved master session in Supabase', { user_id: row.user_id });
-  return data && data.length > 0 ? mapMasterToJS(data[0]) : null;
 }
 
 /** Get BookVehicle row */
 async function getBookVehicleRow(userId) {
-  const client = getClient();
-  const { data, error } = await client
-    .from('book_vehicle')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle();
+  try {
+    const client = getClient();
+    const { data, error } = await client
+      .from('book_vehicle')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
 
-  if (error) {
-    logger.error('Failed to get book vehicle row', error);
-    throw error;
+    if (error) throw error;
+    return mapBookToJS(data);
+  } catch (err) {
+    logger.warn('Supabase getBookVehicleRow failed, using memory fallback:', err.message || err);
+    return memoryStore.book_vehicle.get(userId) || {};
   }
-
-  return mapBookToJS(data);
 }
 
 /** Save or update BookVehicle row */
 async function saveBookVehicleRow(row) {
-  const client = getClient();
-  const dbRow = mapBookToDB(row);
+  memoryStore.book_vehicle.set(row.user_id, row);
 
-  const { data, error } = await client
-    .from('book_vehicle')
-    .upsert(dbRow)
-    .select();
+  try {
+    const client = getClient();
+    const dbRow = mapBookToDB(row);
 
-  if (error) {
-    logger.error('Failed to save book vehicle row', error);
-    throw error;
+    const { data, error } = await client
+      .from('book_vehicle')
+      .upsert(dbRow)
+      .select();
+
+    if (error) throw error;
+
+    logger.info('Saved book vehicle row in Supabase', { user_id: row.user_id });
+    return data && data.length > 0 ? mapBookToJS(data[0]) : row;
+  } catch (err) {
+    logger.warn('Supabase saveBookVehicleRow failed, saved to memory store:', err.message || err);
+    return row;
   }
-
-  logger.info('Saved book vehicle row in Supabase', { user_id: row.user_id });
-  return data && data.length > 0 ? mapBookToJS(data[0]) : null;
 }
 
 /** Get ProvideVehicle row */
 async function getProvideVehicleRow(userId) {
-  const client = getClient();
-  const { data, error } = await client
-    .from('provide_vehicle')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle();
+  try {
+    const client = getClient();
+    const { data, error } = await client
+      .from('provide_vehicle')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
 
-  if (error) {
-    logger.error('Failed to get provide vehicle row', error);
-    throw error;
+    if (error) throw error;
+    return mapProvideToJS(data);
+  } catch (err) {
+    logger.warn('Supabase getProvideVehicleRow failed, using memory fallback:', err.message || err);
+    return memoryStore.provide_vehicle.get(userId) || {};
   }
-
-  return mapProvideToJS(data);
 }
 
 /** Save or update ProvideVehicle row */
 async function saveProvideVehicleRow(row) {
-  const client = getClient();
-  const dbRow = mapProvideToDB(row);
+  memoryStore.provide_vehicle.set(row.user_id, row);
 
-  const { data, error } = await client
-    .from('provide_vehicle')
-    .upsert(dbRow)
-    .select();
+  try {
+    const client = getClient();
+    const dbRow = mapProvideToDB(row);
 
-  if (error) {
-    logger.error('Failed to save provide vehicle row', error);
-    throw error;
+    const { data, error } = await client
+      .from('provide_vehicle')
+      .upsert(dbRow)
+      .select();
+
+    if (error) throw error;
+
+    logger.info('Saved provide vehicle row in Supabase', { user_id: row.user_id });
+    return data && data.length > 0 ? mapProvideToJS(data[0]) : row;
+  } catch (err) {
+    logger.warn('Supabase saveProvideVehicleRow failed, saved to memory store:', err.message || err);
+    return row;
   }
-
-  logger.info('Saved provide vehicle row in Supabase', { user_id: row.user_id });
-  return data && data.length > 0 ? mapProvideToJS(data[0]) : null;
 }
 
 /** Get Support row */
 async function getSupportRow(userId) {
-  const client = getClient();
-  const { data, error } = await client
-    .from('support')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle();
+  try {
+    const client = getClient();
+    const { data, error } = await client
+      .from('support')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
 
-  if (error) {
-    logger.error('Failed to get support row', error);
-    throw error;
+    if (error) throw error;
+    return mapSupportToJS(data);
+  } catch (err) {
+    logger.warn('Supabase getSupportRow failed, using memory fallback:', err.message || err);
+    return memoryStore.support.get(userId) || {};
   }
-
-  return mapSupportToJS(data);
 }
 
 /** Save or update Support row */
 async function saveSupportRow(row) {
-  const client = getClient();
-  const dbRow = mapSupportToDB(row);
+  memoryStore.support.set(row.user_id, row);
 
-  const { data, error } = await client
-    .from('support')
-    .upsert(dbRow)
-    .select();
+  try {
+    const client = getClient();
+    const dbRow = mapSupportToDB(row);
 
-  if (error) {
-    logger.error('Failed to save support row', error);
-    throw error;
+    const { data, error } = await client
+      .from('support')
+      .upsert(dbRow)
+      .select();
+
+    if (error) throw error;
+
+    logger.info('Saved support row in Supabase', { user_id: row.user_id });
+    return data && data.length > 0 ? mapSupportToDB(data[0]) : row;
+  } catch (err) {
+    logger.warn('Supabase saveSupportRow failed, saved to memory store:', err.message || err);
+    return row;
   }
-
-  logger.info('Saved support row in Supabase', { user_id: row.user_id });
-  return data && data.length > 0 ? mapSupportToJS(data[0]) : null;
 }
 
 module.exports = {
