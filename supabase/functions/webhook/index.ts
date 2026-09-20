@@ -358,12 +358,38 @@ function processConversation(chat: any, masterRows: any[]) {
     const dateCheck = validateLoadingDate(message);
     if (dateCheck.valid) {
       data.loadingDate = message.trim();
-      state = "company";
-      response = "🏢 Enter your *Company Name*:\n(or type *NA* if individual)";
+      state = "loading_time";
+      response =
+        "⏰ Select or Enter *Loading Time*:\n\n" +
+        "1️⃣ Morning (06:00 AM - 12:00 PM)\n" +
+        "2️⃣ Afternoon (12:00 PM - 04:00 PM)\n" +
+        "3️⃣ Evening (04:00 PM - 09:00 PM)\n" +
+        "4️⃣ Night (09:00 PM - 06:00 AM)\n" +
+        "5️⃣ Any Time (Full Day Flexible)\n\n" +
+        "Reply with *1 - 5* or type a specific time (e.g., 10:30 AM, 4 PM)";
     } else if (dateCheck.reason === "past") {
       response = "❌ Loading date cannot be in the past.\n\nPlease enter today's date or a future date in DD/MM/YYYY format:\n(e.g., 25/09/2026)";
     } else {
       response = "❌ Invalid date format.\n\nPlease enter a valid date in DD/MM/YYYY format:\n(e.g., 25/09/2026)";
+    }
+  } else if (state === "loading_time") {
+    const timeMap: Record<string, string> = {
+      "1": "Morning (06:00 AM - 12:00 PM)",
+      "2": "Afternoon (12:00 PM - 04:00 PM)",
+      "3": "Evening (04:00 PM - 09:00 PM)",
+      "4": "Night (09:00 PM - 06:00 AM)",
+      "5": "Any Time (Flexible)",
+    };
+    if (timeMap[message]) {
+      data.loadingTime = timeMap[message];
+      state = "company";
+      response = "🏢 Enter your *Company Name*:\n(or type *NA* if individual)";
+    } else if (message.trim().length >= 2) {
+      data.loadingTime = message.trim();
+      state = "company";
+      response = "🏢 Enter your *Company Name*:\n(or type *NA* if individual)";
+    } else {
+      response = "❌ Invalid time.\n\nPlease reply with *1 - 5* or type a valid time (e.g., 10:30 AM, Morning, 4 PM):";
     }
   } else if (state === "company") {
     data.company = message;
@@ -386,7 +412,7 @@ function processConversation(chat: any, masterRows: any[]) {
         `📦 *Cargo:* ${data.cargoType}\n` +
         `🚛 *Vehicle:* ${data.vehicleType} (${data.vehicleSubType || "Standard"})\n` +
         `📝 *Material:* ${data.material}\n` +
-        `📅 *Loading Date:* ${data.loadingDate}\n` +
+        `📅 *Loading Date & Time:* ${data.loadingDate}${data.loadingTime ? ` (${data.loadingTime})` : ""}\n` +
         `👤 *Contact:* ${data.contactName} (${data.company})\n` +
         (data.email ? `📧 *Email:* ${data.email}\n\n` : "\n") +
         "Our team is finding the best quote and will contact you shortly! 🚛💨";
@@ -684,7 +710,7 @@ serve(async (req: Request) => {
                 vehicle_type: parsedData.vehicleType || "",
                 vehicle_sub_type: parsedData.vehicleSubType || "",
                 material: parsedData.material || "",
-                loading_date: parsedData.loadingDate || "",
+                loading_date: (parsedData.loadingDate || "") + (parsedData.loadingTime ? ` (${parsedData.loadingTime})` : ""),
                 company: parsedData.company || "",
                 contact_name: parsedData.contactName || "",
                 phone: parsedData.phone || phone,
