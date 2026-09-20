@@ -211,10 +211,10 @@ function processConversation(chat: any, masterRows: any[]) {
       response =
         "🚛 *Transporter Vehicle Registration*\n\n" +
         "Select Vehicle Category:\n" +
-        "1️⃣ Tempo (7ft, 8ft, 9ft, 14ft, 17ft)\n" +
-        "2️⃣ Open Truck (19ft, 22ft, 24ft, 32ft)\n" +
-        "3️⃣ Container (20ft, 24ft, 32ft SXL/MXL)\n" +
-        "4️⃣ Trailer / ODC (40ft, High Bed, Low Bed)\n\n" +
+        "1️⃣ Tempo\n" +
+        "2️⃣ Open Truck\n" +
+        "3️⃣ Container\n" +
+        "4️⃣ Trailer / ODC\n\n" +
         "Reply with *1, 2, 3 or 4*";
     } else if (message === "3") {
       state = "support";
@@ -356,18 +356,86 @@ function processConversation(chat: any, masterRows: any[]) {
 
   // 3. PROVIDE VEHICLE FLOW
   else if (state === "provider_vehicle_type") {
-    if (["1", "2", "3", "4"].includes(message)) {
-      data.provider_vehicleType = vehicleTypeMap[message] || message;
-      state = "provider_vehicle_number";
-      response = "🔢 Enter *Vehicle Registration Number*:\n(e.g., MH 04 AB 1234)";
+    if (message === "1") {
+      data.provider_vehicleType = "Tempo";
+      state = "provider_tempo_size";
+      response = "🚚 Select *Tempo Size*:\n1️⃣ 7 Ft\n2️⃣ 8 Ft\n3️⃣ 9 Ft\n4️⃣ 14 Ft\n5️⃣ 17 Ft\n6️⃣ Other (Any other dimension)\n\nReply with *1 - 6*";
+    } else if (message === "2") {
+      data.provider_vehicleType = "Open Truck";
+      state = "provider_truck_size";
+      response = "🚛 Select *Truck Size*:\n1️⃣ 19 Ft Open\n2️⃣ 22 Ft Open\n3️⃣ 24 Ft Open\n4️⃣ 32 Ft Open\n5️⃣ Other (Any other dimension)\n\nReply with *1 - 5*";
+    } else if (message === "3") {
+      data.provider_vehicleType = "Container";
+      state = "provider_container_size";
+      response = "📦 Select *Container Size*:\n1️⃣ 20 Ft Close Body\n2️⃣ 24 Ft Close Body\n3️⃣ 32 Ft SXL Close Body\n4️⃣ 32 Ft MXL Close Body\n5️⃣ Other (Any other dimension)\n\nReply with *1 - 5*";
+    } else if (message === "4") {
+      data.provider_vehicleType = "Trailer / ODC";
+      state = "provider_trailer_size";
+      response = "🏗️ Select *Trailer / ODC Type*:\n1️⃣ 40 Ft High Bed\n2️⃣ 40 Ft Low Bed\n3️⃣ Semi Low Bed\n4️⃣ Hydraulic Axle\n5️⃣ Other (Any other dimension)\n\nReply with *1 - 5*";
     } else {
       response =
         "❌ Invalid option.\n\nSelect Vehicle Category:\n" +
-        "1️⃣ Tempo (7ft, 8ft, 9ft, 14ft, 17ft)\n" +
-        "2️⃣ Open Truck (19ft, 22ft, 24ft, 32ft)\n" +
-        "3️⃣ Container (20ft, 24ft, 32ft SXL/MXL)\n" +
-        "4️⃣ Trailer / ODC (40ft, High Bed, Low Bed)\n\n" +
+        "1️⃣ Tempo\n" +
+        "2️⃣ Open Truck\n" +
+        "3️⃣ Container\n" +
+        "4️⃣ Trailer / ODC\n\n" +
         "Reply with *1, 2, 3 or 4*";
+    }
+  } else if (state === "provider_tempo_size") {
+    const tempoMap: Record<string, string> = { "1": "7 Ft", "2": "8 Ft", "3": "9 Ft", "4": "14 Ft", "5": "17 Ft" };
+    if (message === "6") {
+      state = "provider_custom_size";
+      response = "📏 Enter your *Vehicle Dimensions / Size*:\n(e.g., 28 Ft, 45 Ft, Low Bed 50 Ton)";
+    } else if (tempoMap[message]) {
+      data.provider_vehicleSize = tempoMap[message];
+      state = "provider_vehicle_number";
+      response = "🔢 Enter *Vehicle Registration Number*:\n(e.g., MH 04 AB 1234)";
+    } else {
+      response = "❌ Invalid choice. Reply with *1 - 6*:\n1️⃣ 7 Ft\n2️⃣ 8 Ft\n3️⃣ 9 Ft\n4️⃣ 14 Ft\n5️⃣ 17 Ft\n6️⃣ Other (Any other dimension)";
+    }
+  } else if (state === "provider_truck_size") {
+    const truckMap: Record<string, string> = { "1": "19 Ft Open", "2": "22 Ft Open", "3": "24 Ft Open", "4": "32 Ft Open" };
+    if (message === "5") {
+      state = "provider_custom_size";
+      response = "📏 Enter your *Vehicle Dimensions / Size*:\n(e.g., 28 Ft, 45 Ft, Low Bed 50 Ton)";
+    } else if (truckMap[message]) {
+      data.provider_vehicleSize = truckMap[message];
+      state = "provider_vehicle_number";
+      response = "🔢 Enter *Vehicle Registration Number*:\n(e.g., MH 04 AB 1234)";
+    } else {
+      response = "❌ Invalid choice. Reply with *1 - 5*:\n1️⃣ 19 Ft Open\n2️⃣ 22 Ft Open\n3️⃣ 24 Ft Open\n4️⃣ 32 Ft Open\n5️⃣ Other (Any other dimension)";
+    }
+  } else if (state === "provider_container_size") {
+    const containerMap: Record<string, string> = { "1": "20 Ft Close Body", "2": "24 Ft Close Body", "3": "32 Ft SXL Close Body", "4": "32 Ft MXL Close Body" };
+    if (message === "5") {
+      state = "provider_custom_size";
+      response = "📏 Enter your *Vehicle Dimensions / Size*:\n(e.g., 28 Ft, 45 Ft, Low Bed 50 Ton)";
+    } else if (containerMap[message]) {
+      data.provider_vehicleSize = containerMap[message];
+      state = "provider_vehicle_number";
+      response = "🔢 Enter *Vehicle Registration Number*:\n(e.g., MH 04 AB 1234)";
+    } else {
+      response = "❌ Invalid choice. Reply with *1 - 5*:\n1️⃣ 20 Ft Close Body\n2️⃣ 24 Ft Close Body\n3️⃣ 32 Ft SXL Close Body\n4️⃣ 32 Ft MXL Close Body\n5️⃣ Other (Any other dimension)";
+    }
+  } else if (state === "provider_trailer_size") {
+    const trailerMap: Record<string, string> = { "1": "40 Ft High Bed", "2": "40 Ft Low Bed", "3": "Semi Low Bed", "4": "Hydraulic Axle" };
+    if (message === "5") {
+      state = "provider_custom_size";
+      response = "📏 Enter your *Vehicle Dimensions / Size*:\n(e.g., 28 Ft, 45 Ft, Low Bed 50 Ton)";
+    } else if (trailerMap[message]) {
+      data.provider_vehicleSize = trailerMap[message];
+      state = "provider_vehicle_number";
+      response = "🔢 Enter *Vehicle Registration Number*:\n(e.g., MH 04 AB 1234)";
+    } else {
+      response = "❌ Invalid choice. Reply with *1 - 5*:\n1️⃣ 40 Ft High Bed\n2️⃣ 40 Ft Low Bed\n3️⃣ Semi Low Bed\n4️⃣ Hydraulic Axle\n5️⃣ Other (Any other dimension)";
+    }
+  } else if (state === "provider_custom_size") {
+    if (message.trim().length >= 2) {
+      data.provider_vehicleSize = message.trim();
+      state = "provider_vehicle_number";
+      response = "🔢 Enter *Vehicle Registration Number*:\n(e.g., MH 04 AB 1234)";
+    } else {
+      response = "❌ Invalid dimensions.\n\nPlease enter valid vehicle dimensions or size (e.g., 28 Ft, 45 Ft, Low Bed 50 Ton):";
     }
   } else if (state === "provider_vehicle_number") {
     const regRegex = /^([A-Z]{2}\s*[-]?\s*\d{2}\s*[-]?\s*[A-Z]{1,3}\s*[-]?\s*\d{4}|\d{2}\s*BH\s*\d{4}\s*[A-Z]{1,2})$/i;
@@ -406,7 +474,7 @@ function processConversation(chat: any, masterRows: any[]) {
       state = "cta_menu";
       response =
         "✅ *Vehicle Registered Successfully!*\n\n" +
-        `🚛 *Vehicle:* ${data.provider_vehicleType} (${data.provider_vehicleNumber})\n` +
+        `🚛 *Vehicle:* ${data.provider_vehicleType}${data.provider_vehicleSize ? ` (${data.provider_vehicleSize})` : ""} (${data.provider_vehicleNumber})\n` +
         `👤 *Owner/Driver:* ${data.provider_driverName}\n` +
         `⚖️ *Capacity:* ${data.provider_capacity}\n` +
         `🛣️ *Routes:* ${data.provider_routes}\n\n` +
