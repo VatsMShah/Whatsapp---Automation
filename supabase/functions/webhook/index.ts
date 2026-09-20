@@ -166,17 +166,26 @@ function processConversation(chat: any, masterRows: any[]) {
   const truckTypeMap: Record<string, string> = { "1": "19 Ft Open", "2": "22 Ft Open", "3": "24 Ft Open", "4": "32 Ft Open" };
   const containerTypeMap: Record<string, string> = { "1": "20 Ft Close Body", "2": "24 Ft Close Body", "3": "32 Ft SXL Close Body", "4": "32 Ft MXL Close Body" };
 
-  function isValidDateString(dateStr: string): boolean {
+  function validateLoadingDate(dateStr: string): { valid: boolean; reason?: "format" | "past" } {
     const match = dateStr.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (!match) return false;
+    if (!match) return { valid: false, reason: "format" };
     const day = parseInt(match[1], 10);
     const month = parseInt(match[2], 10);
     const year = parseInt(match[3], 10);
-    if (month < 1 || month > 12) return false;
-    if (day < 1 || day > 31) return false;
-    if (year < 2024 || year > 2100) return false;
+    if (month < 1 || month > 12) return { valid: false, reason: "format" };
+    if (day < 1 || day > 31) return { valid: false, reason: "format" };
     const daysInMonth = new Date(year, month, 0).getDate();
-    return day <= daysInMonth;
+    if (day > daysInMonth) return { valid: false, reason: "format" };
+
+    const inputDate = new Date(year, month - 1, day);
+    inputDate.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (inputDate < today) {
+      return { valid: false, reason: "past" };
+    }
+    return { valid: true };
   }
 
   let state = row.state || "start";
@@ -305,12 +314,15 @@ function processConversation(chat: any, masterRows: any[]) {
       response = "❌ Invalid description. Please enter a valid *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)";
     }
   } else if (state === "loading_date") {
-    if (isValidDateString(message)) {
+    const dateCheck = validateLoadingDate(message);
+    if (dateCheck.valid) {
       data.loadingDate = message.trim();
       state = "company";
       response = "🏢 Enter your *Company Name*:\n(or type *NA* if individual)";
+    } else if (dateCheck.reason === "past") {
+      response = "❌ Loading date cannot be in the past.\n\nPlease enter today's date or a future date in DD/MM/YYYY format:\n(e.g., 25/09/2026)";
     } else {
-      response = "❌ Invalid date format. Please enter a valid date in DD/MM/YYYY format:\n(e.g., 25/09/2026)";
+      response = "❌ Invalid date format.\n\nPlease enter a valid date in DD/MM/YYYY format:\n(e.g., 25/09/2026)";
     }
   } else if (state === "company") {
     data.company = message;
