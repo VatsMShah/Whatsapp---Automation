@@ -100,10 +100,11 @@ function processConversation(waMessagePayload, masterRows) {
   };
 
   const tempoSubTypeMap = {
-    1: 'Pickup – 1 MT (8×5×5 ft)',
-    2: '14 Ft – 3 MT (14×6×6 ft)',
-    3: '19 Ft – 6 MT (19×6×6 ft)',
-    4: '22 Ft – 9 MT (22×7×7 ft)',
+    1: '7 Ft',
+    2: '8 Ft',
+    3: '9 Ft',
+    4: '14 Ft',
+    5: '17 Ft',
   };
 
   const containerSubTypeMap = {
@@ -410,7 +411,7 @@ function processConversation(waMessagePayload, masterRows) {
         '25 Packages\n' +
         '15-Jan-2026';
     } else {
-      response = '⚠️ Please select a valid option (1-4)';
+      response = '⚠️ Please select a valid option (1-5)';
     }
   } else if (state === 'container_type') {
     if (containerSubTypeMap[message]) {

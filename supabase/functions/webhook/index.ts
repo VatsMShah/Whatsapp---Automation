@@ -162,18 +162,22 @@ function processConversation(chat: any, masterRows: any[]) {
 
   const vehicleTypeMap: Record<string, string> = { 1: "Tempo", 2: "Truck", 3: "Container", 4: "Trailer / ODC" };
   const cargoTypeMap: Record<string, string> = { 1: "Domestic", 2: "Import", 3: "Export" };
-  const vehicleCategoryMap: Record<string, string> = { tempo_type: "Tempo", truck_type: "Truck", container_type: "Container" };
+  const tempoSizeMap: Record<string, string> = { "1": "7 Ft", "2": "8 Ft", "3": "9 Ft", "4": "14 Ft", "5": "17 Ft" };
+  const truckTypeMap: Record<string, string> = { "1": "19 Ft Open", "2": "22 Ft Open", "3": "24 Ft Open", "4": "32 Ft Open" };
+  const containerTypeMap: Record<string, string> = { "1": "20 Ft Close Body", "2": "24 Ft Close Body", "3": "32 Ft SXL Close Body", "4": "32 Ft MXL Close Body" };
 
-  let state = row.state || "start";
-  let data: any = {};
-  try {
-    data = typeof row.data === "string" ? JSON.parse(row.data || "{}") : row.data || {};
-  } catch {
-    data = {};
+  function isValidDateString(dateStr: string): boolean {
+    const match = dateStr.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return false;
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+    if (year < 2024 || year > 2100) return false;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    return day <= daysInMonth;
   }
-
-  let response = "";
-  let flowType = row.flowType || row.flow_type || "";
 
   // 1. MAIN MENU
   if (state === "main_menu") {
@@ -252,19 +256,51 @@ function processConversation(chat: any, masterRows: any[]) {
     } else {
       response = "❌ Invalid choice. Reply with *1, 2, 3 or 4*";
     }
-  } else if (["tempo_type", "truck_type", "container_type"].includes(state)) {
-    data.vehicleType = vehicleCategoryMap[state];
-    data.vehicleSubType = message;
-    state = "material";
-    response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)";
+  } else if (state === "tempo_type") {
+    if (tempoSizeMap[message]) {
+      data.vehicleType = "Tempo";
+      data.vehicleSubType = tempoSizeMap[message];
+      state = "material";
+      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)";
+    } else {
+      response = "❌ Invalid choice. Reply with *1 - 5*:\n1️⃣ 7 Ft\n2️⃣ 8 Ft\n3️⃣ 9 Ft\n4️⃣ 14 Ft\n5️⃣ 17 Ft";
+    }
+  } else if (state === "truck_type") {
+    if (truckTypeMap[message]) {
+      data.vehicleType = "Truck";
+      data.vehicleSubType = truckTypeMap[message];
+      state = "material";
+      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)";
+    } else {
+      response = "❌ Invalid choice. Reply with *1 - 4*:\n1️⃣ 19 Ft Open\n2️⃣ 22 Ft Open\n3️⃣ 24 Ft Open\n4️⃣ 32 Ft Open";
+    }
+  } else if (state === "container_type") {
+    if (containerTypeMap[message]) {
+      data.vehicleType = "Container";
+      data.vehicleSubType = containerTypeMap[message];
+      state = "material";
+      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)";
+    } else {
+      response = "❌ Invalid choice. Reply with *1 - 4*:\n1️⃣ 20 Ft Close Body\n2️⃣ 24 Ft Close Body\n3️⃣ 32 Ft SXL Close Body\n4️⃣ 32 Ft MXL Close Body";
+    }
   } else if (state === "material") {
-    data.material = message;
-    state = "loading_date";
-    response = "📅 Enter *Loading Date* (DD/MM/YYYY):\n(e.g., 25/09/2026)";
+    const hasLetters = /[a-zA-Z]/.test(message);
+    const isValidLength = message.trim().length >= 2;
+    if (hasLetters && isValidLength) {
+      data.material = message.trim();
+      state = "loading_date";
+      response = "📅 Enter *Loading Date* (DD/MM/YYYY):\n(e.g., 25/09/2026)";
+    } else {
+      response = "❌ Invalid description. Please enter a valid *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)";
+    }
   } else if (state === "loading_date") {
-    data.loadingDate = message;
-    state = "company";
-    response = "🏢 Enter your *Company Name*:\n(or type *NA* if individual)";
+    if (isValidDateString(message)) {
+      data.loadingDate = message.trim();
+      state = "company";
+      response = "🏢 Enter your *Company Name*:\n(or type *NA* if individual)";
+    } else {
+      response = "❌ Invalid date format. Please enter a valid date in DD/MM/YYYY format:\n(e.g., 25/09/2026)";
+    }
   } else if (state === "company") {
     data.company = message;
     state = "contact_name";
