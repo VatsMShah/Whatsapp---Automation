@@ -79,6 +79,47 @@ async function sendWhatsAppCtaButtons(to: string) {
   return data;
 }
 
+async function sendWhatsAppCtaUrlButton(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "cta_url",
+        header: {
+          type: "text",
+          text: "🌐 Traket Transport Solutions",
+        },
+        body: {
+          text: "Visit our official website to explore our services, fleet details, and coverage across India! 🇮🇳",
+        },
+        action: {
+          name: "cta_url",
+          parameters: {
+            display_text: "Visit Website 🌐",
+            url: "https://traket.in/",
+          },
+        },
+      },
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    console.error("❌ WhatsApp CTA URL API error:", { status: res.status, data });
+  } else {
+    console.log("✅ WhatsApp CTA URL button sent:", data);
+  }
+  return data;
+}
+
 // =====================================================================
 // HMAC SIGNATURE VERIFICATION
 // =====================================================================
@@ -502,6 +543,13 @@ function processConversation(chat: any, masterRows: any[]) {
         flowType: "",
         data: "{}",
       };
+    } else if (message === "cta_ai" || lowerMessage === "know about traket" || lowerMessage.includes("know about traket") || lowerMessage.includes("about traket")) {
+      state = "cta_ai";
+      response =
+        "🌐 *Welcome to Traket Transport* 🚛\n\n" +
+        "We provide fast, reliable, and technology-driven logistics solutions across India 🇮🇳\n\n" +
+        "🔗 *Visit our official website:* https://traket.in/\n\n" +
+        "Type *Hi* anytime to return to the main menu!";
     } else if (message === "cta_support" || lowerMessage === "support") {
       state = "support";
       flowType = "support";
@@ -604,7 +652,9 @@ serve(async (req: Request) => {
             if (output.response) {
               await sendWhatsAppText(output.phone, output.response);
             }
-            if (output.state === "cta_menu") {
+            if (output.state === "cta_ai") {
+              await sendWhatsAppCtaUrlButton(output.phone);
+            } else if (output.state === "cta_menu") {
               await sendWhatsAppCtaButtons(output.phone);
             }
           } catch (waErr) {

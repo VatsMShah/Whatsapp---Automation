@@ -577,9 +577,13 @@ function processConversation(waMessagePayload, masterRows) {
         '2️⃣ Provide Vehicle (Transporter)\n' +
         '3️⃣ Support\n\n' +
         'Reply with *1, 2 or 3*';
-    } else if (message === 'cta_ai') {
-      state = 'ai_chat';
-      response = '🤖 Ask me anything about Traket!';
+    } else if (message === 'cta_ai' || lowerMessage === 'know about traket' || lowerMessage.includes('know about traket')) {
+      state = 'cta_ai';
+      response =
+        '🌐 *Welcome to Traket Transport* 🚛\n\n' +
+        'We provide fast, reliable, and technology-driven logistics solutions across India 🇮🇳\n\n' +
+        '🔗 *Visit our official website:* https://traket.in/\n\n' +
+        'Type *Hi* anytime to return to the main menu!';
     } else if (message === 'cta_support') {
       state = 'support_flow';
       response =
