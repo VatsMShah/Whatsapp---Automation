@@ -321,18 +321,25 @@ function processConversation(chat: any, masterRows: any[]) {
     state = "email";
     response = "📧 Enter your *Email Address*:\n(or type *Skip*)";
   } else if (state === "email") {
-    data.email = lowerMessage === "skip" ? "" : message;
-    data.phone = phone;
-    state = "cta_menu";
-    response =
-      "✅ *Booking Request Submitted Successfully!*\n\n" +
-      `📍 *Route:* ${data.loadingPin} ➔ ${data.unloadingPin}\n` +
-      `📦 *Cargo:* ${data.cargoType}\n` +
-      `🚛 *Vehicle:* ${data.vehicleType} (${data.vehicleSubType || "Standard"})\n` +
-      `📝 *Material:* ${data.material}\n` +
-      `📅 *Loading Date:* ${data.loadingDate}\n` +
-      `👤 *Contact:* ${data.contactName} (${data.company})\n\n` +
-      "Our team is finding the best quote and will contact you shortly! 🚛💨";
+    const isSkip = ["skip", "na", "n/a"].includes(lowerMessage);
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (isSkip || emailRegex.test(message.trim())) {
+      data.email = isSkip ? "" : message.trim();
+      data.phone = phone;
+      state = "cta_menu";
+      response =
+        "✅ *Booking Request Submitted Successfully!*\n\n" +
+        `📍 *Route:* ${data.loadingPin} ➔ ${data.unloadingPin}\n` +
+        `📦 *Cargo:* ${data.cargoType}\n` +
+        `🚛 *Vehicle:* ${data.vehicleType} (${data.vehicleSubType || "Standard"})\n` +
+        `📝 *Material:* ${data.material}\n` +
+        `📅 *Loading Date:* ${data.loadingDate}\n` +
+        `👤 *Contact:* ${data.contactName} (${data.company})\n` +
+        (data.email ? `📧 *Email:* ${data.email}\n\n` : "\n") +
+        "Our team is finding the best quote and will contact you shortly! 🚛💨";
+    } else {
+      response = "❌ Invalid email format.\n\nPlease enter a valid email address (e.g., rahul@gmail.com, info@company.co.in)\nor type *Skip*:";
+    }
   }
 
   // 3. PROVIDE VEHICLE FLOW
