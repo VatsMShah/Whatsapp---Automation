@@ -179,6 +179,17 @@ function processConversation(chat: any, masterRows: any[]) {
     return day <= daysInMonth;
   }
 
+  let state = row.state || "start";
+  let data: any = {};
+  try {
+    data = typeof row.data === "string" ? JSON.parse(row.data || "{}") : row.data || {};
+  } catch {
+    data = {};
+  }
+
+  let response = "";
+  let flowType = row.flowType || row.flow_type || "";
+
   // 1. MAIN MENU
   if (state === "main_menu") {
     if (message === "1") {
@@ -401,135 +412,143 @@ function processConversation(chat: any, masterRows: any[]) {
 // MAIN SERVE HANDLER
 // =====================================================================
 serve(async (req: Request) => {
-  const url = new URL(req.url);
-  console.log(`[${req.method}] ${url.pathname}`);
+  try {
+    const url = new URL(req.url);
+    console.log(`[${req.method}] ${url.pathname}`);
 
-  // 1. Health check
-  if (req.method === "GET" && url.pathname.endsWith("/health")) {
-    return new Response("ok", { status: 200 });
-  }
-
-  // 2. Webhook verification GET
-  if (req.method === "GET") {
-    const mode = url.searchParams.get("hub.mode");
-    const token = url.searchParams.get("hub.verify_token");
-    const challenge = url.searchParams.get("hub.challenge");
-
-    if (mode === "subscribe" && token === WHATSAPP_VERIFY_TOKEN) {
-      console.log("Webhook verified successfully with Meta");
-      return new Response(challenge, { status: 200 });
-    }
-    return new Response("Forbidden", { status: 403 });
-  }
-
-  // 3. Webhook event POST
-  if (req.method === "POST") {
-    const rawBody = await req.text();
-    const signature = req.headers.get("x-hub-signature-256");
-
-    if (WHATSAPP_APP_SECRET && !(await isValidSignature(rawBody, signature))) {
-      console.warn("Invalid webhook signature — skipping signature check in dev fallback");
+    // 1. Health check
+    if (req.method === "GET" && url.pathname.endsWith("/health")) {
+      return new Response("ok", { status: 200 });
     }
 
-    let payload: any = {};
-    try {
-      payload = JSON.parse(rawBody);
-    } catch {
-      return new Response("Bad Request", { status: 400 });
+    // 2. Webhook verification GET
+    if (req.method === "GET") {
+      const mode = url.searchParams.get("hub.mode");
+      const token = url.searchParams.get("hub.verify_token");
+      const challenge = url.searchParams.get("hub.challenge");
+
+      if (mode === "subscribe" && token === WHATSAPP_VERIFY_TOKEN) {
+        console.log("Webhook verified successfully with Meta");
+        return new Response(challenge, { status: 200 });
+      }
+      return new Response("Forbidden", { status: 403 });
     }
 
-    const entries = payload.entry || [];
-    for (const entry of entries) {
-      const changes = entry.changes || [];
-      for (const change of changes) {
-        const val = change.value;
-        if (!val?.messages?.length) {
-          console.log("Webhook received status update / non-message payload, skipping.");
-          continue;
-        }
+    // 3. Webhook event POST
+    if (req.method === "POST") {
+      const rawBody = await req.text();
+      const signature = req.headers.get("x-hub-signature-256");
 
-        const phone = val.messages[0]?.from;
-        const msgText = val.messages[0]?.text?.body;
-        console.log(`Incoming message from ${phone}: "${msgText}"`);
+      if (WHATSAPP_APP_SECRET && !(await isValidSignature(rawBody, signature))) {
+        console.warn("Invalid webhook signature — skipping signature check in dev fallback");
+      }
 
-        // 1. Get existing session from Supabase (safe fallback)
-        let masterRows: any[] = [];
-        try {
-          const { data } = await supabase
-            .from("users_master")
-            .select("*")
-            .eq("phone", phone);
-          masterRows = data || [];
-        } catch (dbErr) {
-          console.warn("Failed to fetch master row from Supabase:", dbErr);
-        }
+      let payload: any = {};
+      try {
+        payload = JSON.parse(rawBody);
+      } catch {
+        return new Response("Bad Request", { status: 400 });
+      }
 
-        // 2. Process state machine
-        const output = processConversation(val, masterRows);
-        console.log(`Next state: "${output.state}", response: "${output.response?.slice(0, 30)}..."`);
-
-        // 3. Send WhatsApp reply FIRST so user always gets the reply immediately
-        try {
-          if (output.response) {
-            await sendWhatsAppText(output.phone, output.response);
+      const entries = payload.entry || [];
+      for (const entry of entries) {
+        const changes = entry.changes || [];
+        for (const change of changes) {
+          const val = change.value;
+          if (!val?.messages?.length) {
+            console.log("Webhook received status update / non-message payload, skipping.");
+            continue;
           }
-          if (output.state === "cta_menu") {
-            await sendWhatsAppCtaButtons(output.phone);
+
+          const phone = val.messages[0]?.from;
+          const msgText = val.messages[0]?.text?.body;
+          console.log(`Incoming message from ${phone}: "${msgText}"`);
+
+          // 1. Get existing session from Supabase (safe fallback)
+          let masterRows: any[] = [];
+          try {
+            const { data } = await supabase
+              .from("users_master")
+              .select("*")
+              .eq("phone", phone);
+            masterRows = data || [];
+          } catch (dbErr) {
+            console.warn("Failed to fetch master row from Supabase:", dbErr);
           }
-        } catch (waErr) {
-          console.error("Error sending WhatsApp message:", waErr);
-        }
 
-        // 4. Upsert session to Supabase in background
-        try {
-          await supabase.from("users_master").upsert({
-            user_id: output.user_id,
-            phone: output.phone,
-            state: output.state,
-            updated_at: output.updated_at,
-            flow_type: output.flowType,
-            data: JSON.parse(output.data || "{}"),
-          });
+          // 2. Process state machine
+          const output = processConversation(val, masterRows);
+          console.log(`Next state: "${output.state}", response: "${output.response?.slice(0, 30)}..."`);
 
-          const parsedData = JSON.parse(output.data || "{}");
-          if (output.flowType === "book") {
-            await supabase.from("book_vehicle").upsert({
+          // 3. Send WhatsApp reply FIRST so user always gets the reply immediately
+          try {
+            if (output.response) {
+              await sendWhatsAppText(output.phone, output.response);
+            }
+            if (output.state === "cta_menu") {
+              await sendWhatsAppCtaButtons(output.phone);
+            }
+          } catch (waErr) {
+            console.error("Error sending WhatsApp message:", waErr);
+          }
+
+          // 4. Upsert session to Supabase in background
+          try {
+            await supabase.from("users_master").upsert({
               user_id: output.user_id,
+              phone: output.phone,
               state: output.state,
               updated_at: output.updated_at,
-              loading_pin: parsedData.loadingPin || "",
-              unloading_pin: parsedData.unloadingPin || "",
-              cargo_type: parsedData.cargoType || "",
-              vehicle_type: parsedData.vehicleType || "",
-              vehicle_sub_type: parsedData.vehicleSubType || "",
-              material: parsedData.material || "",
-              loading_date: parsedData.loadingDate || "",
-              company: parsedData.company || "",
-              contact_name: parsedData.contactName || "",
-              phone: parsedData.phone || phone,
-              email: parsedData.email || "",
+              flow_type: output.flowType,
+              data: JSON.parse(output.data || "{}"),
             });
-          } else if (output.flowType === "provider") {
-            await supabase.from("provide_vehicle").upsert({
-              user_id: output.user_id,
-              state: output.state,
-              updated_at: output.updated_at,
-              vehicle_type: parsedData.provider_vehicleType || "",
-              vehicle_number: parsedData.provider_vehicleNumber || "",
-              driver_name: parsedData.provider_driverName || "",
-              capacity: parsedData.provider_capacity || "",
-              route_preference: parsedData.provider_routes || "",
-              driver_phone: parsedData.provider_driverPhone || phone,
-            });
+
+            const parsedData = JSON.parse(output.data || "{}");
+            if (output.flowType === "book") {
+              await supabase.from("book_vehicle").upsert({
+                user_id: output.user_id,
+                state: output.state,
+                updated_at: output.updated_at,
+                loading_pin: parsedData.loadingPin || "",
+                unloading_pin: parsedData.unloadingPin || "",
+                cargo_type: parsedData.cargoType || "",
+                vehicle_type: parsedData.vehicleType || "",
+                vehicle_sub_type: parsedData.vehicleSubType || "",
+                material: parsedData.material || "",
+                loading_date: parsedData.loadingDate || "",
+                company: parsedData.company || "",
+                contact_name: parsedData.contactName || "",
+                phone: parsedData.phone || phone,
+                email: parsedData.email || "",
+              });
+            } else if (output.flowType === "provider") {
+              await supabase.from("provide_vehicle").upsert({
+                user_id: output.user_id,
+                state: output.state,
+                updated_at: output.updated_at,
+                vehicle_type: parsedData.provider_vehicleType || "",
+                vehicle_number: parsedData.provider_vehicleNumber || "",
+                driver_name: parsedData.provider_driverName || "",
+                capacity: parsedData.provider_capacity || "",
+                route_preference: parsedData.provider_routes || "",
+                driver_phone: parsedData.provider_driverPhone || phone,
+              });
+            }
+          } catch (dbSaveErr) {
+            console.warn("Failed to persist session to Supabase:", dbSaveErr);
           }
-        } catch (dbSaveErr) {
-          console.warn("Failed to persist session to Supabase:", dbSaveErr);
         }
       }
+
+      return new Response("EVENT_RECEIVED", { status: 200 });
     }
 
-    return new Response("EVENT_RECEIVED", { status: 200 });
+    return new Response("Method not allowed", { status: 405 });
+  } catch (err: any) {
+    console.error("Fatal error handling request:", err);
+    return new Response(JSON.stringify({ error: err?.message || String(err), stack: err?.stack || "" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
-
-  return new Response("Method not allowed", { status: 405 });
 });

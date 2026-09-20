@@ -1,0 +1,21 @@
+{
+  "entry": [
+    {
+      "changes": [
+        {
+          "value": {
+            "messages": [
+              {
+                "from": "919876543210",
+                "type": "text",
+                "text": {
+                  "body": "6"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
