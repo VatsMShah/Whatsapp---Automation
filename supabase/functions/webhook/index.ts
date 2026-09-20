@@ -356,32 +356,64 @@ function processConversation(chat: any, masterRows: any[]) {
 
   // 3. PROVIDE VEHICLE FLOW
   else if (state === "provider_vehicle_type") {
-    data.provider_vehicleType = vehicleTypeMap[message] || message;
-    state = "provider_vehicle_number";
-    response = "🔢 Enter *Vehicle Registration Number*:\n(e.g., MH 04 AB 1234)";
+    if (["1", "2", "3", "4"].includes(message)) {
+      data.provider_vehicleType = vehicleTypeMap[message] || message;
+      state = "provider_vehicle_number";
+      response = "🔢 Enter *Vehicle Registration Number*:\n(e.g., MH 04 AB 1234)";
+    } else {
+      response =
+        "❌ Invalid option.\n\nSelect Vehicle Category:\n" +
+        "1️⃣ Tempo (7ft, 8ft, 9ft, 14ft, 17ft)\n" +
+        "2️⃣ Open Truck (19ft, 22ft, 24ft, 32ft)\n" +
+        "3️⃣ Container (20ft, 24ft, 32ft SXL/MXL)\n" +
+        "4️⃣ Trailer / ODC (40ft, High Bed, Low Bed)\n\n" +
+        "Reply with *1, 2, 3 or 4*";
+    }
   } else if (state === "provider_vehicle_number") {
-    data.provider_vehicleNumber = message.toUpperCase();
-    state = "provider_driver_name";
-    response = "👤 Enter *Driver / Owner Name*:";
+    const regRegex = /^([A-Z]{2}\s*[-]?\s*\d{2}\s*[-]?\s*[A-Z]{1,3}\s*[-]?\s*\d{4}|\d{2}\s*BH\s*\d{4}\s*[A-Z]{1,2})$/i;
+    if (regRegex.test(message.trim())) {
+      data.provider_vehicleNumber = message.trim().toUpperCase();
+      state = "provider_driver_name";
+      response = "👤 Enter *Driver / Owner Name*:";
+    } else {
+      response = "❌ Invalid Vehicle Registration Number.\n\nPlease enter a valid registration number (e.g., MH 04 AB 1234):";
+    }
   } else if (state === "provider_driver_name") {
-    data.provider_driverName = message;
-    state = "provider_capacity";
-    response = "⚖️ Enter *Payload Capacity* (in Tons / Kgs):\n(e.g., 9 Tons or 2500 Kgs)";
+    const hasLetters = /[a-zA-Z]{2,}/.test(message);
+    if (hasLetters) {
+      data.provider_driverName = message.trim();
+      state = "provider_capacity";
+      response = "⚖️ Enter *Payload Capacity* (in Tons / Kgs):\n(e.g., 9 Tons or 2500 Kgs)";
+    } else {
+      response = "❌ Invalid name.\n\nPlease enter a valid Driver / Owner Name (e.g., Rahul Sharma):";
+    }
   } else if (state === "provider_capacity") {
-    data.provider_capacity = message;
-    state = "provider_routes";
-    response = "🛣️ Enter *Preferred Routes / Operating Cities*:\n(e.g., Mumbai - Ahmedabad - Delhi)";
+    const isLiquid = /(litre|liter|ml|gallon)/i.test(message);
+    const hasNumber = /\d+/.test(message);
+    const hasValidUnitOrNum = (hasNumber || /(ton|mt|kg|quintal)/i.test(message)) && !isLiquid;
+    if (hasValidUnitOrNum) {
+      data.provider_capacity = message.trim();
+      state = "provider_routes";
+      response = "🛣️ Enter *Preferred Routes / Operating Cities*:\n(e.g., Mumbai - Ahmedabad - Delhi)";
+    } else {
+      response = "❌ Invalid payload capacity.\n\nPlease enter payload capacity in Tons or Kgs (e.g., 9 Tons, 2500 Kgs, 10 MT):";
+    }
   } else if (state === "provider_routes") {
-    data.provider_routes = message;
-    data.provider_driverPhone = phone;
-    state = "cta_menu";
-    response =
-      "✅ *Vehicle Registered Successfully!*\n\n" +
-      `🚛 *Vehicle:* ${data.provider_vehicleType} (${data.provider_vehicleNumber})\n` +
-      `👤 *Owner/Driver:* ${data.provider_driverName}\n` +
-      `⚖️ *Capacity:* ${data.provider_capacity}\n` +
-      `🛣️ *Routes:* ${data.provider_routes}\n\n` +
-      "We will assign loads matching your routes and vehicle capacity! 🚛🤝";
+    const hasLetters = /[a-zA-Z]{2,}/.test(message);
+    if (hasLetters) {
+      data.provider_routes = message.trim();
+      data.provider_driverPhone = phone;
+      state = "cta_menu";
+      response =
+        "✅ *Vehicle Registered Successfully!*\n\n" +
+        `🚛 *Vehicle:* ${data.provider_vehicleType} (${data.provider_vehicleNumber})\n` +
+        `👤 *Owner/Driver:* ${data.provider_driverName}\n` +
+        `⚖️ *Capacity:* ${data.provider_capacity}\n` +
+        `🛣️ *Routes:* ${data.provider_routes}\n\n` +
+        "We will assign loads matching your routes and vehicle capacity! 🚛🤝";
+    } else {
+      response = "❌ Invalid route.\n\nPlease enter operating routes or cities (e.g., Mumbai - Ahmedabad - Delhi):";
+    }
   }
 
   // 4. CTA MENU ACTIONS
