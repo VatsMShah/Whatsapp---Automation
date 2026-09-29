@@ -238,9 +238,39 @@ async function sendWhatsAppFlowDatePicker(to: string, flowId: string, minDate?: 
   return data;
 }
 
-// =====================================================================
-// HMAC SIGNATURE VERIFICATION
-// =====================================================================
+async function sendWhatsAppTimeSlotButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "⏰ Select your preferred loading time slot:" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "1", title: "🌅 Slot One (6AM - 4PM)" } },
+            { type: "reply", reply: { id: "2", title: "🌙 Slot Two (4PM - 6AM)" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    console.error("❌ WhatsApp Time Slot Buttons error:", { status: res.status, data });
+  } else {
+    console.log("✅ WhatsApp Time Slot buttons sent:", data);
+  }
+  return data;
+}
+
 async function isValidSignature(rawBody: string, signatureHeader: string | null): Promise<boolean> {
   if (!signatureHeader || !WHATSAPP_APP_SECRET) return true;
   try {
@@ -1046,6 +1076,11 @@ serve(async (req: Request) => {
                   await sendWhatsAppText(output.phone, output.response);
                 }
               }
+            } else if (output.state === "loading_time") {
+              if (output.response) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppTimeSlotButtons(output.phone);
             } else if (output.response) {
               await sendWhatsAppText(output.phone, output.response);
             }
