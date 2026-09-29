@@ -257,6 +257,7 @@ async function sendWhatsAppTimeSlotButtons(to: string) {
           buttons: [
             { type: "reply", reply: { id: "1", title: "🌅 Slot 1 (6AM-4PM)" } },
             { type: "reply", reply: { id: "2", title: "🌙 Slot 2 (4PM-6AM)" } },
+            { type: "reply", reply: { id: "back", title: "⬅️ Back" } },
           ],
         },
       },
@@ -301,6 +302,42 @@ async function sendWhatsAppMainMenuButtons(to: string) {
     console.error("❌ WhatsApp Main Menu Buttons error:", { status: res.status, data });
   } else {
     console.log("✅ WhatsApp Main Menu buttons sent:", data);
+  }
+  return data;
+}
+
+async function sendWhatsAppWithBackButton(to: string, text: string) {
+  // Strip _(Reply *Back* to ...)_ hint — we show a real button instead
+  const cleanText = text.replace(/\n*_?\(Reply \*Back\* to [^)]+\)_?/g, "").trim();
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: cleanText || text },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "back", title: "⬅️ Back" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    console.error("❌ WhatsApp With Back Button error:", { status: res.status, data });
+    // Fallback to plain text
+    await sendWhatsAppText(to, text);
+  } else {
+    console.log("✅ WhatsApp message with back button sent");
   }
   return data;
 }
@@ -1098,7 +1135,9 @@ serve(async (req: Request) => {
               }
             } else if (output.state === "loading_time") {
               if (output.response) {
-                await sendWhatsAppText(output.phone, output.response);
+                // Strip back hint — Back is shown as button on the slot selection
+                const cleanText = output.response.replace(/\n*_?\(Reply \*Back\* to [^)]+\)_?/g, "").trim();
+                if (cleanText) await sendWhatsAppText(output.phone, cleanText);
               }
               await sendWhatsAppTimeSlotButtons(output.phone);
             } else if (output.state === "main_menu") {
@@ -1107,7 +1146,11 @@ serve(async (req: Request) => {
               }
               await sendWhatsAppMainMenuButtons(output.phone);
             } else if (output.response) {
-              await sendWhatsAppText(output.phone, output.response);
+              if (output.response.includes("Reply *Back*")) {
+                await sendWhatsAppWithBackButton(output.phone, output.response);
+              } else {
+                await sendWhatsAppText(output.phone, output.response);
+              }
             }
 
             if (output.state === "cta_ai") {
