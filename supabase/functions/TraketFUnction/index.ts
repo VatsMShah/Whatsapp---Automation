@@ -256,8 +256,8 @@ async function sendWhatsAppTimeSlotButtons(to: string) {
         body: { text: "⏰ Select your preferred loading time slot:" },
         action: {
           buttons: [
-            { type: "reply", reply: { id: "1", title: "🌅 Slot One (6AM - 4PM)" } },
-            { type: "reply", reply: { id: "2", title: "🌙 Slot Two (4PM - 6AM)" } },
+            { type: "reply", reply: { id: "1", title: "🌅 Slot 1 (6AM-4PM)" } },
+            { type: "reply", reply: { id: "2", title: "🌙 Slot 2 (4PM-6AM)" } },
           ],
         },
       },
