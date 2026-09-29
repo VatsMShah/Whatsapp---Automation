@@ -460,12 +460,12 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "loading_time";
       response =
         "⏰ Select or Enter *Loading Time*:\n\n" +
-        "1️⃣ Morning (06:00 AM - 12:00 PM)\n" +
-        "2️⃣ Afternoon (12:00 PM - 04:00 PM)\n" +
-        "3️⃣ Evening (04:00 PM - 09:00 PM)\n" +
-        "4️⃣ Night (09:00 PM - 06:00 AM)\n" +
-        "5️⃣ Any Time (Full Day Flexible)\n\n" +
-        "Reply with *1 - 5* or type a specific time (e.g., 10:30 AM, 4 PM)\n\n_(Reply *Back* to edit Loading Date)_";
+        "1️⃣ Slot One (06:00 AM - 04:00 PM)\n" +
+        "2️⃣ Slot Two (04:00 PM - 06:00 AM)\n" +
+
+
+
+        "Reply with *1* or *2* (or type a specific time, e.g., 10:30 AM, 4 PM)\n\n_(Reply *Back* to edit Loading Date)_";
     } else if (state === "contact_name") {
       delete data.company;
       state = "company";
