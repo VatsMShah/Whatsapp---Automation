@@ -454,7 +454,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "main_menu";
       flowType = "";
       response =
-        "🙏 *Welcome to Traket Transport* 🚛",
+        "🙏 *Welcome to Traket Transport* 🚛";
     }
     // Customer Booking Flow - Step Back
     else if (state === "unloading_pin") {
