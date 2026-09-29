@@ -460,12 +460,9 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "loading_time";
       response =
         "⏰ Select or Enter *Loading Time*:\n\n" +
-        "1️⃣ Morning (06:00 AM - 12:00 PM)\n" +
-        "2️⃣ Afternoon (12:00 PM - 04:00 PM)\n" +
-        "3️⃣ Evening (04:00 PM - 09:00 PM)\n" +
-        "4️⃣ Night (09:00 PM - 06:00 AM)\n" +
-        "5️⃣ Any Time (Full Day Flexible)\n\n" +
-        "Reply with *1 - 5* or type a specific time (e.g., 10:30 AM, 4 PM)\n\n_(Reply *Back* to edit Loading Date)_";
+        "1️⃣ Slot One (06:00 AM - 04:00 PM)\n" +
+        "2️⃣ Slot Two (04:00 PM - 06:00 AM)\n\n" +
+        "Reply with *1* or *2* (or type a specific time, e.g., 10:30 AM, 4 PM)\n\n_(Reply *Back* to edit Loading Date)_";
     } else if (state === "contact_name") {
       delete data.company;
       state = "company";
@@ -724,12 +721,9 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "loading_time";
       response =
         "⏰ Select or Enter *Loading Time*:\n\n" +
-        "1️⃣ Morning (06:00 AM - 12:00 PM)\n" +
-        "2️⃣ Afternoon (12:00 PM - 04:00 PM)\n" +
-        "3️⃣ Evening (04:00 PM - 09:00 PM)\n" +
-        "4️⃣ Night (09:00 PM - 06:00 AM)\n" +
-        "5️⃣ Any Time (Full Day Flexible)\n\n" +
-        "Reply with *1 - 5* or type a specific time (e.g., 10:30 AM, 4 PM)\n\n_(Reply *Back* to edit Loading Date)_";
+        "1️⃣ Slot One (06:00 AM - 04:00 PM)\n" +
+        "2️⃣ Slot Two (04:00 PM - 06:00 AM)\n\n" +
+        "Reply with *1* or *2* (or type a specific time, e.g., 10:30 AM, 4 PM)\n\n_(Reply *Back* to edit Loading Date)_";
     } else if (dateCheck.reason === "past") {
       response = "❌ Loading date cannot be in the past.\n\nPlease enter today's date or a future date in DD/MM/YYYY format:\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit Material Description)_";
     } else {
@@ -737,11 +731,8 @@ async function processConversation(chat: any, masterRows: any[]) {
     }
   } else if (state === "loading_time") {
     const timeMap: Record<string, string> = {
-      "1": "Morning (06:00 AM - 12:00 PM)",
-      "2": "Afternoon (12:00 PM - 04:00 PM)",
-      "3": "Evening (04:00 PM - 09:00 PM)",
-      "4": "Night (09:00 PM - 06:00 AM)",
-      "5": "Any Time (Flexible)",
+      "1": "Slot One (06:00 AM - 04:00 PM)",
+      "2": "Slot Two (04:00 PM - 06:00 AM)",
     };
     if (timeMap[message]) {
       data.loadingTime = timeMap[message];
@@ -752,7 +743,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "company";
       response = "🏢 Enter your *Company Name*:\n(or type *NA* if individual)\n\n_(Reply *Back* to edit Loading Time)_";
     } else {
-      response = "❌ Invalid time.\n\nPlease reply with *1 - 5* or type a valid time (e.g., 10:30 AM, Morning, 4 PM):\n\n_(Reply *Back* to edit Loading Date)_";
+      response = "❌ Invalid time.\n\nPlease reply with *1* or *2* or type a valid time (e.g., 10:30 AM, 4 PM):\n\n_(Reply *Back* to edit Loading Date)_";
     }
   } else if (state === "company") {
     data.company = message;
