@@ -271,6 +271,40 @@ async function sendWhatsAppTimeSlotButtons(to: string) {
   return data;
 }
 
+async function sendWhatsAppMainMenuButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "👉 Please select your requirement:" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "1", title: "🚚 Book a Vehicle" } },
+            { type: "reply", reply: { id: "2", title: "🚛 Provide Vehicle" } },
+            { type: "reply", reply: { id: "3", title: "🆘 Support" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    console.error("❌ WhatsApp Main Menu Buttons error:", { status: res.status, data });
+  } else {
+    console.log("✅ WhatsApp Main Menu buttons sent:", data);
+  }
+  return data;
+}
+
 async function isValidSignature(rawBody: string, signatureHeader: string | null): Promise<boolean> {
   if (!signatureHeader || !WHATSAPP_APP_SECRET) return true;
   try {
@@ -349,12 +383,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       updated_at: new Date().toISOString(),
       response:
         "🙏 *Welcome to Traket Transport* 🚛\n\n" +
-        "We provide reliable logistics solutions across India 🇮🇳\n\n" +
-        "👉 Please select your requirement:\n\n" +
-        "1️⃣ Book a Vehicle (Customer)\n" +
-        "2️⃣ Provide Vehicle (Transporter)\n" +
-        "3️⃣ Support\n\n" +
-        "Reply with *1, 2 or 3*",
+        "We provide reliable logistics solutions across India 🇮🇳",
       flowType: "",
       data: "{}",
     };
@@ -425,12 +454,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "main_menu";
       flowType = "";
       response =
-        "🙏 *Welcome to Traket Transport* 🚛\n\n" +
-        "👉 Please select your requirement:\n\n" +
-        "1️⃣ Book a Vehicle (Customer)\n" +
-        "2️⃣ Provide Vehicle (Transporter)\n" +
-        "3️⃣ Support\n\n" +
-        "Reply with *1, 2 or 3*";
+        "🙏 *Welcome to Traket Transport* 🚛",
     }
     // Customer Booking Flow - Step Back
     else if (state === "unloading_pin") {
@@ -945,11 +969,7 @@ async function processConversation(chat: any, masterRows: any[]) {
         state: "main_menu",
         updated_at: new Date().toISOString(),
         response:
-          "👉 Please select your requirement:\n\n" +
-          "1️⃣ Book a Vehicle (Customer)\n" +
-          "2️⃣ Provide Vehicle (Transporter)\n" +
-          "3️⃣ Support\n\n" +
-          "Reply with *1, 2 or 3*",
+          "👉 Please select your requirement:",
         flowType: "",
         data: "{}",
       };
@@ -1081,6 +1101,11 @@ serve(async (req: Request) => {
                 await sendWhatsAppText(output.phone, output.response);
               }
               await sendWhatsAppTimeSlotButtons(output.phone);
+            } else if (output.state === "main_menu") {
+              if (output.response) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppMainMenuButtons(output.phone);
             } else if (output.response) {
               await sendWhatsAppText(output.phone, output.response);
             }
