@@ -977,6 +977,7 @@ serve(async (req: Request) => {
       return new Response("ok", { status: 200 });
     }
 
+
     // 2. Webhook verification GET
     if (req.method === "GET") {
       const mode = url.searchParams.get("hub.mode");
