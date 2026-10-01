@@ -123,7 +123,7 @@ async function sendWhatsAppCtaButtons(to: string) {
         body: { text: "👉 What would you like to do next?" },
         action: {
           buttons: [
-            { type: "reply", reply: { id: "cta_new", title: "Post New Order" } },
+            { type: "reply", reply: { id: "cta_new", title: "Main Menu" } },
             { type: "reply", reply: { id: "cta_ai", title: "Know About Traket" } },
             { type: "reply", reply: { id: "cta_support", title: "Support" } },
           ],
@@ -287,7 +287,7 @@ async function sendWhatsAppMainMenuButtons(to: string) {
       type: "interactive",
       interactive: {
         type: "button",
-        body: { text: "👉 Please select your requirement:" },
+        body: { text: "🙏 *Welcome to Traket Transport* 🚛\n\nWe provide reliable logistics solutions across India 🇮🇳\n\n👉 Please select your requirement:" },
         action: {
           buttons: [
             { type: "reply", reply: { id: "1", title: "🚚 Book a Vehicle" } },
@@ -421,9 +421,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       phone: phone,
       state: "main_menu",
       updated_at: new Date().toISOString(),
-      response:
-        "🙏 *Welcome to Traket Transport* 🚛\n\n" +
-        "We provide reliable logistics solutions across India 🇮🇳",
+      response: "",
       flowType: "",
       data: "{}",
     };
@@ -493,8 +491,7 @@ async function processConversation(chat: any, masterRows: any[]) {
     if (state === "loading_pin" || state === "provider_vehicle_type") {
       state = "main_menu";
       flowType = "";
-      response =
-        "🙏 *Welcome to Traket Transport* 🚛";
+      response = "";
     }
     // Customer Booking Flow - Step Back
     else if (state === "unloading_pin") {
@@ -631,7 +628,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       response = "⚖️ Enter *Payload Capacity* (in Tons / Kgs):\n(e.g., 9 Tons or 2500 Kgs)\n\n_(Reply *Back* to edit Driver Name)_";
     } else {
       state = "main_menu";
-      response = "👋 Welcome to *Traket Transport*!\n\nType *Hi* to see the main menu options.";
+      response = "";
     }
 
     return {
@@ -1010,15 +1007,14 @@ async function processConversation(chat: any, masterRows: any[]) {
   // 4. CTA MENU ACTIONS
   // =====================================================================
   else if (state === "cta_menu" || lowerMessage.startsWith("cta_")) {
-    if (message === "cta_new" || lowerMessage === "post new order") {
+    if (message === "cta_new" || lowerMessage === "main menu" || lowerMessage === "post new order") {
       const newSessionId = `${phone}_${Date.now()}`;
       return {
         user_id: newSessionId,
         phone: phone,
         state: "main_menu",
         updated_at: new Date().toISOString(),
-        response:
-          "👉 Please select your requirement:",
+        response: "",
         flowType: "",
         data: "{}",
       };
@@ -1035,12 +1031,12 @@ async function processConversation(chat: any, masterRows: any[]) {
       response = "📞 *Traket Support Desk*\n\n📧 Email: support@traket.in\n🌐 Web: https://traket.in\n\nOur team is here to help you!";
     } else {
       state = "main_menu";
-      response = "👋 Type *Hi* anytime to start a new booking or inquiry!";
+      response = "";
     }
   } else {
     // Default fallback
     state = "main_menu";
-    response = "👋 Welcome to *Traket Transport*!\n\nType *Hi* to see the main menu options.";
+    response = "";
   }
 
   return {
@@ -1152,9 +1148,6 @@ serve(async (req: Request) => {
               }
               await sendWhatsAppTimeSlotButtons(output.phone);
             } else if (output.state === "main_menu") {
-              if (output.response) {
-                await sendWhatsAppText(output.phone, output.response);
-              }
               await sendWhatsAppMainMenuButtons(output.phone);
             } else if (output.response) {
               if (output.response.includes("Reply *Back*")) {
