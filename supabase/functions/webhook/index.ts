@@ -431,6 +431,218 @@ async function sendWhatsAppFcl40VehicleButtons(to: string, containerName: string
   return data;
 }
 
+async function sendWhatsAppTempoBodyButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "🚚 Select *Tempo Body Type*:\n\n1️⃣ Open\n2️⃣ Cover / Closed\n3️⃣ Container" },
+        footer: { text: "Reply Back to edit Tempo Size" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "1", title: "Open" } },
+            { type: "reply", reply: { id: "2", title: "Cover / Closed" } },
+            { type: "reply", reply: { id: "3", title: "Container" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Tempo Body Buttons error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppTruckBodyButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "🚛 Select *Truck Body Type*:\n\n1️⃣ FULL Body (7 ft)\n2️⃣ Half / Pona Dala Body (3/4 ft)" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "1", title: "FULL Body (7 ft)" } },
+            { type: "reply", reply: { id: "2", title: "Half / Pona Dala" } },
+            { type: "reply", reply: { id: "back", title: "⬅️ Back" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Truck Body Buttons error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppTruckOpenCloseButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "🚛 Select *Truck Enclosure*:\n\n1️⃣ Close Body\n2️⃣ Open Body" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "1", title: "Close Body" } },
+            { type: "reply", reply: { id: "2", title: "Open Body" } },
+            { type: "reply", reply: { id: "back", title: "⬅️ Back" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Truck Open Close Buttons error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppTruckRemarksButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "📝 Enter any *Specific Remarks / Requirements*:\n(e.g., Tarpaulin required, side loading, fast delivery, or click *None / Skip*)" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "skip", title: "⏩ None / Skip" } },
+            { type: "reply", reply: { id: "back", title: "⬅️ Back" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Truck Remarks Buttons error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppTrailerDimButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "🚛 Select *Trailer Cargo Dimension*:\n(Standard trailer size is 40 × 8 × 7 ft)\n\n1️⃣ Normal\n2️⃣ Over Dimension (ODC)" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "1", title: "Normal" } },
+            { type: "reply", reply: { id: "2", title: "Over Dimension" } },
+            { type: "reply", reply: { id: "back", title: "⬅️ Back" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Trailer Dim Buttons error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppTrailerBedButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "🚛 Select *Trailer Bed Type*:\n\n1️⃣ Highbed\n2️⃣ Semi Bed\n3️⃣ Low Bed" },
+        footer: { text: "Reply Back to edit Cargo Dimension" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "1", title: "Highbed" } },
+            { type: "reply", reply: { id: "2", title: "Semi Bed" } },
+            { type: "reply", reply: { id: "3", title: "Low Bed" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Trailer Bed Buttons error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppTrailerModelButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "🚛 Select *Trailer Model & Capacity*:\n\n1️⃣ 3518 (27 MT)\n2️⃣ 4018 (33 MT)\n3️⃣ AMW (40 MT)" },
+        footer: { text: "Reply Back to edit Bed Type" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "1", title: "3518 (27 MT)" } },
+            { type: "reply", reply: { id: "2", title: "4018 (33 MT)" } },
+            { type: "reply", reply: { id: "3", title: "AMW (40 MT)" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Trailer Model Buttons error:", { status: res.status, data });
+  return data;
+}
+
 async function sendWhatsAppWithBackButton(to: string, text: string) {
   // Strip _(Reply *Back* to ...)_ hint — we show a real button instead
   const cleanText = text.replace(/\n*_?\(Reply \*Back\* to [^)]+\)_?/g, "").trim();
@@ -727,39 +939,105 @@ async function processConversation(chat: any, masterRows: any[]) {
       delete data.cargoType;
       state = "cargo_type";
       response = "📦 Select *Cargo Type*:\n1️⃣ Domestic\n2️⃣ Import\n3️⃣ Export\n\nReply with *1, 2 or 3*\n\n_(Reply *Back* to edit Unloading Pincode)_";
-    } else if (["tempo_type", "truck_type", "container_type"].includes(state)) {
+    } else if (state === "tempo_type") {
       delete data.vehicleType;
       state = "vehicle_type";
       response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
+    } else if (state === "tempo_body_type") {
+      delete data.vehicleSubType;
+      state = "tempo_type";
+      response =
+        "🚚 Select *Tempo Capacity & Size*:\n\n" +
+        "1️⃣ 1 MT (Size 8 × 5 × 5 ft)\n" +
+        "2️⃣ 3 MT (Size 14 × 6 × 6 ft)\n" +
+        "3️⃣ 6 MT (Size 19 × 7 × 7 ft)\n" +
+        "4️⃣ 10 MT (Size 20 × 7 × 7 ft)\n\n" +
+        "Reply with *1, 2, 3 or 4*\n\n" +
+        "_(Reply *Back* to edit Vehicle Type)_";
+    } else if (state === "truck_type") {
+      delete data.vehicleType;
+      state = "vehicle_type";
+      response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
+    } else if (state === "truck_body_type") {
+      delete data.vehicleSubType;
+      state = "truck_type";
+      response =
+        "🚛 Select *Truck Capacity & Size*:\n\n" +
+        "1️⃣ 12 MT (Size 22 × 7 × 7 ft)\n" +
+        "2️⃣ 18 MT (Size 22 × 7 × 7 ft)\n" +
+        "3️⃣ 25 MT (Size 24 × 7 × 7 ft)\n" +
+        "4️⃣ 30 MT (Size 28 × 7 × 7 ft)\n" +
+        "5️⃣ 35 MT (Size 30 × 7 × 7 ft)\n" +
+        "6️⃣ 40 MT (Size 32 × 7 × 7 ft)\n\n" +
+        "Reply with *1 - 6*\n\n" +
+        "_(Reply *Back* to edit Vehicle Type)_";
+    } else if (state === "truck_open_close") {
+      delete data.bodyType;
+      state = "truck_body_type";
+      response = "";
+    } else if (state === "truck_remarks") {
+      delete data.openClose;
+      state = "truck_open_close";
+      response = "";
+    } else if (state === "container_type") {
+      delete data.vehicleType;
+      state = "vehicle_type";
+      response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
+    } else if (state === "trailer_dim_type") {
+      delete data.vehicleType;
+      state = "vehicle_type";
+      response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
+    } else if (state === "trailer_bed_type") {
+      delete data.trailerDimType;
+      state = "trailer_dim_type";
+      response = "";
+    } else if (state === "trailer_model") {
+      delete data.trailerBedType;
+      state = "trailer_bed_type";
+      response = "";
+    } else if (state === "trailer_dimensions") {
+      delete data.vehicleSubType;
+      state = "trailer_model";
+      response = "";
     } else if (state === "material") {
+      delete data.material;
       if (data.cargoType === "Import" || data.cargoType === "Export") {
-        delete data.material;
         state = "cargo_weight";
         response =
           "⚖️ Enter Cargo *Weight*:\n" +
           "(e.g., 18 MT, 24 MT, or 20000 kg)\n\n" +
           "ℹ️ _(Note: 1000 kg = 1 MT)_\n\n" +
           "_(Reply *Back* to edit Vehicle Selection)_";
-      } else if (data.vehicleType === "Trailer / ODC") {
-        delete data.vehicleType;
-        delete data.vehicleSubType;
-        state = "vehicle_type";
-        response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
       } else if (data.vehicleType === "Tempo") {
-        delete data.vehicleSubType;
-        state = "tempo_type";
-        response = "Select *Tempo Size*:\n1️⃣ 7 Ft\n2️⃣ 8 Ft\n3️⃣ 9 Ft\n4️⃣ 14 Ft\n5️⃣ 17 Ft\n\nReply with *1 - 5*\n\n_(Reply *Back* to edit Vehicle Type)_";
+        delete data.bodyType;
+        state = "tempo_body_type";
+        response = "";
       } else if (data.vehicleType === "Truck") {
-        delete data.vehicleSubType;
-        state = "truck_type";
-        response = "Select *Truck Type*:\n1️⃣ 19 Ft Open\n2️⃣ 22 Ft Open\n3️⃣ 24 Ft Open\n4️⃣ 32 Ft Open\n\nReply with *1 - 4*\n\n_(Reply *Back* to edit Vehicle Type)_";
-      } else if (data.vehicleType === "Container") {
+        delete data.remarks;
+        state = "truck_remarks";
+        response = "";
+      } else if (data.vehicleType === "Container" || data.vehicleType === "32 Ft Container") {
         delete data.vehicleSubType;
         state = "container_type";
-        response = "Select *Container Type*:\n1️⃣ 20 Ft Close Body\n2️⃣ 24 Ft Close Body\n3️⃣ 32 Ft SXL Close Body\n4️⃣ 32 Ft MXL Close Body\n\nReply with *1 - 4*\n\n_(Reply *Back* to edit Vehicle Type)_";
+        response =
+          "📦 Select *32 Ft Container Type* (Size: 32 × 8 × 9 ft):\n\n" +
+          "1️⃣ SXL 07 - 10 MT (6 Tyre)\n" +
+          "2️⃣ MXL 15 - 18 MT (10 Tyre)\n" +
+          "3️⃣ MXL 21 - 25 MT (12 Tyre)\n" +
+          "4️⃣ MXL 28 - 30 MT (14 Tyre)\n\n" +
+          "Reply with *1, 2, 3 or 4*\n\n" +
+          "_(Reply *Back* to edit Vehicle Type)_";
+      } else if (data.vehicleType === "Trailer / ODC") {
+        delete data.dimensions;
+        state = "trailer_dimensions";
+        response =
+          "📐 Enter Trailer Cargo *Size (L × W × H)*:\n" +
+          "(e.g., 40 x 8 x 7 Ft  or  45 x 9 x 8 Ft)\n\n" +
+          "💡 _Standard trailer size is 40 × 8 × 7 ft. You can type *Standard* or enter custom dimensions._\n\n" +
+          "_(Reply *Back* to edit Trailer Model)_";
       } else {
         state = "vehicle_type";
-        response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*";
+        response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
       }
     } else if (state === "loading_date") {
       delete data.loadingDate;
@@ -1126,53 +1404,315 @@ async function processConversation(chat: any, masterRows: any[]) {
       response = "❌ Please enter a valid *Cargo Weight*:\n(e.g., 18 MT, 24 MT, or 25000 kg)\n\nℹ️ _(Note: 1000 kg = 1 MT)_\n\n_(Reply *Back* to edit Vehicle Selection)_";
     }
   } else if (state === "vehicle_type") {
-    if (message === "1") {
+    if (message === "1" || /tempo/i.test(message)) {
       data.vehicleType = "Tempo";
+      delete data.vehicleSubType;
+      delete data.bodyType;
       state = "tempo_type";
-      response = "Select *Tempo Size*:\n1️⃣ 7 Ft\n2️⃣ 8 Ft\n3️⃣ 9 Ft\n4️⃣ 14 Ft\n5️⃣ 17 Ft\n\nReply with *1 - 5*\n\n_(Reply *Back* to edit Vehicle Type)_";
-    } else if (message === "2") {
+      response =
+        "🚚 Select *Tempo Capacity & Size*:\n\n" +
+        "1️⃣ 1 MT (Size 8 × 5 × 5 ft)\n" +
+        "2️⃣ 3 MT (Size 14 × 6 × 6 ft)\n" +
+        "3️⃣ 6 MT (Size 19 × 7 × 7 ft)\n" +
+        "4️⃣ 10 MT (Size 20 × 7 × 7 ft)\n\n" +
+        "Reply with *1, 2, 3 or 4*\n\n" +
+        "_(Reply *Back* to edit Vehicle Type)_";
+    } else if (message === "2" || /truck/i.test(message)) {
       data.vehicleType = "Truck";
+      delete data.vehicleSubType;
+      delete data.bodyType;
+      delete data.openClose;
+      delete data.remarks;
       state = "truck_type";
-      response = "Select *Truck Type*:\n1️⃣ 19 Ft Open\n2️⃣ 22 Ft Open\n3️⃣ 24 Ft Open\n4️⃣ 32 Ft Open\n\nReply with *1 - 4*\n\n_(Reply *Back* to edit Vehicle Type)_";
-    } else if (message === "3") {
-      data.vehicleType = "Container";
+      response =
+        "🚛 Select *Truck Capacity & Size*:\n\n" +
+        "1️⃣ 12 MT (Size 22 × 7 × 7 ft)\n" +
+        "2️⃣ 18 MT (Size 22 × 7 × 7 ft)\n" +
+        "3️⃣ 25 MT (Size 24 × 7 × 7 ft)\n" +
+        "4️⃣ 30 MT (Size 28 × 7 × 7 ft)\n" +
+        "5️⃣ 35 MT (Size 30 × 7 × 7 ft)\n" +
+        "6️⃣ 40 MT (Size 32 × 7 × 7 ft)\n\n" +
+        "Reply with *1 - 6*\n\n" +
+        "_(Reply *Back* to edit Vehicle Type)_";
+    } else if (message === "3" || /container/i.test(message)) {
+      data.vehicleType = "32 Ft Container";
+      delete data.vehicleSubType;
       state = "container_type";
-      response = "Select *Container Type*:\n1️⃣ 20 Ft Close Body\n2️⃣ 24 Ft Close Body\n3️⃣ 32 Ft SXL Close Body\n4️⃣ 32 Ft MXL Close Body\n\nReply with *1 - 4*\n\n_(Reply *Back* to edit Vehicle Type)_";
-    } else if (message === "4") {
+      response =
+        "📦 Select *32 Ft Container Type* (Size: 32 × 8 × 9 ft):\n\n" +
+        "1️⃣ SXL 07 - 10 MT (6 Tyre)\n" +
+        "2️⃣ MXL 15 - 18 MT (10 Tyre)\n" +
+        "3️⃣ MXL 21 - 25 MT (12 Tyre)\n" +
+        "4️⃣ MXL 28 - 30 MT (14 Tyre)\n\n" +
+        "Reply with *1, 2, 3 or 4*\n\n" +
+        "_(Reply *Back* to edit Vehicle Type)_";
+    } else if (message === "4" || /trailer|odc/i.test(message)) {
       data.vehicleType = "Trailer / ODC";
-      data.vehicleSubType = "Trailer";
-      state = "material";
-      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Vehicle Type)_";
+      delete data.trailerDimType;
+      delete data.trailerBedType;
+      delete data.vehicleSubType;
+      delete data.dimensions;
+      state = "trailer_dim_type";
+      response = "";
     } else {
-      response = "❌ Invalid choice. Reply with *1, 2, 3 or 4*:\n\n_(Reply *Back* to edit Cargo Type)_";
+      response =
+        "❌ Invalid choice. Reply with *1, 2, 3 or 4*:\n\n" +
+        "1️⃣ Tempo\n" +
+        "2️⃣ Truck\n" +
+        "3️⃣ Container\n" +
+        "4️⃣ Trailer / ODC\n\n" +
+        "_(Reply *Back* to edit Cargo Type)_";
     }
   } else if (state === "tempo_type") {
-    if (tempoSizeMap[message]) {
-      data.vehicleType = "Tempo";
-      data.vehicleSubType = tempoSizeMap[message];
-      state = "material";
-      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Tempo Size)_";
+    if (message === "1" || /1\s*mt|8\*5\*5/i.test(message)) {
+      data.vehicleSubType = "1 MT (8x5x5 ft)";
+      data.weight = "1 MT";
+      state = "tempo_body_type";
+      response = "";
+    } else if (message === "2" || /3\s*mt|14\*6\*6/i.test(message)) {
+      data.vehicleSubType = "3 MT (14x6x6 ft)";
+      data.weight = "3 MT";
+      state = "tempo_body_type";
+      response = "";
+    } else if (message === "3" || /6\s*mt|19\*7\*7/i.test(message)) {
+      data.vehicleSubType = "6 MT (19x7x7 ft)";
+      data.weight = "6 MT";
+      state = "tempo_body_type";
+      response = "";
+    } else if (message === "4" || /10\s*mt|20\*7\*7/i.test(message)) {
+      data.vehicleSubType = "10 MT (20x7x7 ft)";
+      data.weight = "10 MT";
+      state = "tempo_body_type";
+      response = "";
     } else {
-      response = "❌ Invalid choice. Reply with *1 - 5*:\n1️⃣ 7 Ft\n2️⃣ 8 Ft\n3️⃣ 9 Ft\n4️⃣ 14 Ft\n5️⃣ 17 Ft\n\n_(Reply *Back* to edit Vehicle Type)_";
+      response =
+        "❌ Invalid choice. Reply with *1, 2, 3 or 4*:\n\n" +
+        "1️⃣ 1 MT (Size 8 × 5 × 5 ft)\n" +
+        "2️⃣ 3 MT (Size 14 × 6 × 6 ft)\n" +
+        "3️⃣ 6 MT (Size 19 × 7 × 7 ft)\n" +
+        "4️⃣ 10 MT (Size 20 × 7 × 7 ft)\n\n" +
+        "_(Reply *Back* to edit Vehicle Type)_";
+    }
+  } else if (state === "tempo_body_type") {
+    if (message === "1" || /open/i.test(message)) {
+      data.bodyType = "Open";
+      state = "material";
+      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Tempo Body Type)_";
+    } else if (message === "2" || /cover|close/i.test(message)) {
+      data.bodyType = "Cover / Closed";
+      state = "material";
+      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Tempo Body Type)_";
+    } else if (message === "3" || /container/i.test(message)) {
+      data.bodyType = "Container";
+      state = "material";
+      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Tempo Body Type)_";
+    } else {
+      response =
+        "❌ Please select Tempo Body Type using buttons below:\n\n" +
+        "1️⃣ Open\n" +
+        "2️⃣ Cover / Closed\n" +
+        "3️⃣ Container\n\n" +
+        "_(Reply *Back* to edit Tempo Size)_";
     }
   } else if (state === "truck_type") {
-    if (truckTypeMap[message]) {
-      data.vehicleType = "Truck";
-      data.vehicleSubType = truckTypeMap[message];
-      state = "material";
-      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Truck Type)_";
+    if (message === "1" || /12\s*mt/i.test(message)) {
+      data.vehicleSubType = "12 MT (Size 22x7x7 ft)";
+      data.weight = "12 MT";
+      state = "truck_body_type";
+      response = "";
+    } else if (message === "2" || /18\s*mt/i.test(message)) {
+      data.vehicleSubType = "18 MT (Size 22x7x7 ft)";
+      data.weight = "18 MT";
+      state = "truck_body_type";
+      response = "";
+    } else if (message === "3" || /25\s*mt/i.test(message)) {
+      data.vehicleSubType = "25 MT (Size 24x7x7 ft)";
+      data.weight = "25 MT";
+      state = "truck_body_type";
+      response = "";
+    } else if (message === "4" || /30\s*mt/i.test(message)) {
+      data.vehicleSubType = "30 MT (Size 28x7x7 ft)";
+      data.weight = "30 MT";
+      state = "truck_body_type";
+      response = "";
+    } else if (message === "5" || /35\s*mt/i.test(message)) {
+      data.vehicleSubType = "35 MT (Size 30x7x7 ft)";
+      data.weight = "35 MT";
+      state = "truck_body_type";
+      response = "";
+    } else if (message === "6" || /40\s*mt/i.test(message)) {
+      data.vehicleSubType = "40 MT (Size 32x7x7 ft)";
+      data.weight = "40 MT";
+      state = "truck_body_type";
+      response = "";
     } else {
-      response = "❌ Invalid choice. Reply with *1 - 4*:\n1️⃣ 19 Ft Open\n2️⃣ 22 Ft Open\n3️⃣ 24 Ft Open\n4️⃣ 32 Ft Open\n\n_(Reply *Back* to edit Vehicle Type)_";
+      response =
+        "❌ Invalid choice. Reply with *1 - 6*:\n\n" +
+        "1️⃣ 12 MT (Size 22 × 7 × 7 ft)\n" +
+        "2️⃣ 18 MT (Size 22 × 7 × 7 ft)\n" +
+        "3️⃣ 25 MT (Size 24 × 7 × 7 ft)\n" +
+        "4️⃣ 30 MT (Size 28 × 7 × 7 ft)\n" +
+        "5️⃣ 35 MT (Size 30 × 7 × 7 ft)\n" +
+        "6️⃣ 40 MT (Size 32 × 7 × 7 ft)\n\n" +
+        "_(Reply *Back* to edit Vehicle Type)_";
     }
+  } else if (state === "truck_body_type") {
+    if (message === "1" || /full/i.test(message)) {
+      data.bodyType = "FULL Body (7 ft)";
+      state = "truck_open_close";
+      response = "";
+    } else if (message === "2" || /half|pona/i.test(message)) {
+      data.bodyType = "Half / Pona Dala Body (3/4 ft)";
+      state = "truck_open_close";
+      response = "";
+    } else {
+      response =
+        "❌ Please select Truck Body Type using buttons below:\n\n" +
+        "1️⃣ FULL Body (7 ft)\n" +
+        "2️⃣ Half / Pona Dala Body (3/4 ft)\n\n" +
+        "_(Reply *Back* to edit Truck Size)_";
+    }
+  } else if (state === "truck_open_close") {
+    if (message === "1" || /close/i.test(message)) {
+      data.openClose = "Close";
+      state = "truck_remarks";
+      response = "";
+    } else if (message === "2" || /open/i.test(message)) {
+      data.openClose = "Open";
+      state = "truck_remarks";
+      response = "";
+    } else {
+      response =
+        "❌ Please select Enclosure using buttons below:\n\n" +
+        "1️⃣ Close Body\n" +
+        "2️⃣ Open Body\n\n" +
+        "_(Reply *Back* to edit Body Type)_";
+    }
+  } else if (state === "truck_remarks") {
+    if (message === "skip" || /skip|none|na|n\/a|no/i.test(message)) {
+      data.remarks = "None";
+    } else {
+      data.remarks = message.trim();
+    }
+    state = "material";
+    response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Remarks)_";
   } else if (state === "container_type") {
-    if (containerTypeMap[message]) {
-      data.vehicleType = "Container";
-      data.vehicleSubType = containerTypeMap[message];
+    if (message === "1" || /sxl|07|7\s*mt|6\s*tyre/i.test(message)) {
+      data.vehicleSubType = "32 Ft SXL 07-10 MT (6 Tyre)";
+      data.weight = "7-10 MT";
+      data.dimensions = "32 × 8 × 9 ft";
+      state = "material";
+      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Container Type)_";
+    } else if (message === "2" || /15|18\s*mt|10\s*tyre/i.test(message)) {
+      data.vehicleSubType = "32 Ft MXL 15-18 MT (10 Tyre)";
+      data.weight = "15-18 MT";
+      data.dimensions = "32 × 8 × 9 ft";
+      state = "material";
+      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Container Type)_";
+    } else if (message === "3" || /21|25\s*mt|12\s*tyre/i.test(message)) {
+      data.vehicleSubType = "32 Ft MXL 21-25 MT (12 Tyre)";
+      data.weight = "21-25 MT";
+      data.dimensions = "32 × 8 × 9 ft";
+      state = "material";
+      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Container Type)_";
+    } else if (message === "4" || /28|30\s*mt|14\s*tyre/i.test(message)) {
+      data.vehicleSubType = "32 Ft MXL 28-30 MT (14 Tyre)";
+      data.weight = "28-30 MT";
+      data.dimensions = "32 × 8 × 9 ft";
       state = "material";
       response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Container Type)_";
     } else {
-      response = "❌ Invalid choice. Reply with *1 - 4*:\n1️⃣ 20 Ft Close Body\n2️⃣ 24 Ft Close Body\n3️⃣ 32 Ft SXL Close Body\n4️⃣ 32 Ft MXL Close Body\n\n_(Reply *Back* to edit Vehicle Type)_";
+      response =
+        "❌ Invalid choice. Reply with *1, 2, 3 or 4*:\n\n" +
+        "1️⃣ SXL 07 - 10 MT (6 Tyre)\n" +
+        "2️⃣ MXL 15 - 18 MT (10 Tyre)\n" +
+        "3️⃣ MXL 21 - 25 MT (12 Tyre)\n" +
+        "4️⃣ MXL 28 - 30 MT (14 Tyre)\n\n" +
+        "_(Reply *Back* to edit Vehicle Type)_";
     }
+  } else if (state === "trailer_dim_type") {
+    if (message === "1" || /normal/i.test(message)) {
+      data.trailerDimType = "Normal";
+      state = "trailer_bed_type";
+      response = "";
+    } else if (message === "2" || /over|odc/i.test(message)) {
+      data.trailerDimType = "Over Dimension (ODC)";
+      state = "trailer_bed_type";
+      response = "";
+    } else {
+      response =
+        "❌ Please select Trailer Cargo Dimension:\n\n" +
+        "1️⃣ Normal\n" +
+        "2️⃣ Over Dimension (ODC)\n\n" +
+        "_(Reply *Back* to edit Vehicle Type)_";
+    }
+  } else if (state === "trailer_bed_type") {
+    if (message === "1" || /high/i.test(message)) {
+      data.trailerBedType = "Highbed";
+      state = "trailer_model";
+      response = "";
+    } else if (message === "2" || /semi/i.test(message)) {
+      data.trailerBedType = "Semi Bed";
+      state = "trailer_model";
+      response = "";
+    } else if (message === "3" || /low/i.test(message)) {
+      data.trailerBedType = "Low Bed";
+      state = "trailer_model";
+      response = "";
+    } else {
+      response =
+        "❌ Please select Bed Type using buttons below:\n\n" +
+        "1️⃣ Highbed\n" +
+        "2️⃣ Semi Bed\n" +
+        "3️⃣ Low Bed\n\n" +
+        "_(Reply *Back* to edit Trailer Dimension)_";
+    }
+  } else if (state === "trailer_model") {
+    if (message === "1" || /3518|27\s*mt/i.test(message)) {
+      data.vehicleSubType = "3518 (27 MT)";
+      data.weight = "27 MT";
+      state = "trailer_dimensions";
+      response =
+        "📐 Enter Trailer Cargo *Size (L × W × H)*:\n" +
+        "(e.g., 40 x 8 x 7 Ft  or  45 x 9 x 8 Ft)\n\n" +
+        "💡 _Standard trailer size is 40 × 8 × 7 ft. You can type *Standard* or enter custom dimensions._\n\n" +
+        "_(Reply *Back* to edit Trailer Model)_";
+    } else if (message === "2" || /4018|33\s*mt/i.test(message)) {
+      data.vehicleSubType = "4018 (33 MT)";
+      data.weight = "33 MT";
+      state = "trailer_dimensions";
+      response =
+        "📐 Enter Trailer Cargo *Size (L × W × H)*:\n" +
+        "(e.g., 40 x 8 x 7 Ft  or  45 x 9 x 8 Ft)\n\n" +
+        "💡 _Standard trailer size is 40 × 8 × 7 ft. You can type *Standard* or enter custom dimensions._\n\n" +
+        "_(Reply *Back* to edit Trailer Model)_";
+    } else if (message === "3" || /amw|40\s*mt/i.test(message)) {
+      data.vehicleSubType = "AMW (40 MT)";
+      data.weight = "40 MT";
+      state = "trailer_dimensions";
+      response =
+        "📐 Enter Trailer Cargo *Size (L × W × H)*:\n" +
+        "(e.g., 40 x 8 x 7 Ft  or  45 x 9 x 8 Ft)\n\n" +
+        "💡 _Standard trailer size is 40 × 8 × 7 ft. You can type *Standard* or enter custom dimensions._\n\n" +
+        "_(Reply *Back* to edit Trailer Model)_";
+    } else {
+      response =
+        "❌ Please select Trailer Model using buttons below:\n\n" +
+        "1️⃣ 3518 (27 MT)\n" +
+        "2️⃣ 4018 (33 MT)\n" +
+        "3️⃣ AMW (40 MT)\n\n" +
+        "_(Reply *Back* to edit Bed Type)_";
+    }
+  } else if (state === "trailer_dimensions") {
+    if (/standard/i.test(message)) {
+      data.dimensions = "Standard (40 × 8 × 7 ft)";
+    } else if (message.trim().length >= 2) {
+      data.dimensions = message.trim();
+    } else {
+      data.dimensions = "40 × 8 × 7 ft";
+    }
+    state = "material";
+    response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Trailer Size)_";
   } else if (state === "material") {
     const hasLetters = /[a-zA-Z]/.test(message);
     const isValidLength = message.trim().length >= 2;
@@ -1352,7 +1892,12 @@ async function processConversation(chat: any, masterRows: any[]) {
         `📍 *Route:* ${data.loadingPin} (${data.loadingLocation || "Origin"}) ➔ ${data.unloadingPin} (${data.unloadingLocation || "Destination"})\n` +
         `📦 *Cargo:* ${data.cargoType}${data.fclType ? ` (${data.fclType} - ${data.containerType || ""})` : ""}\n` +
         `🚛 *Vehicle / Trailer:* ${data.vehicleSubType || data.vehicleType || "Standard"}\n` +
-        (data.weight ? `⚖️ *Weight:* ${data.weight}\n` : "") +
+        (data.bodyType ? `🚚 *Body Type:* ${data.bodyType}\n` : "") +
+        (data.openClose ? `🔒 *Enclosure:* ${data.openClose}\n` : "") +
+        (data.trailerDimType ? `📐 *Trailer Type:* ${data.trailerDimType}\n` : "") +
+        (data.trailerBedType ? `🛏️ *Bed Type:* ${data.trailerBedType}\n` : "") +
+        (data.remarks && data.remarks !== "None" ? `💬 *Remarks:* ${data.remarks}\n` : "") +
+        (data.weight ? `⚖️ *Weight / Capacity:* ${data.weight}\n` : "") +
         `📝 *Material:* ${data.material}\n` +
         (data.dimensions ? `📐 *Dimensions:* ${data.dimensions}\n` : "") +
         (logisticsDetails ? `\n${logisticsDetails}` : "") +
@@ -1649,6 +2194,41 @@ serve(async (req: Request) => {
                 await sendWhatsAppText(output.phone, output.response);
               }
               await sendWhatsAppFcl40VehicleButtons(output.phone, parsedData.containerType || "FCL 40");
+            } else if (output.state === "tempo_body_type") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppTempoBodyButtons(output.phone);
+            } else if (output.state === "truck_body_type") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppTruckBodyButtons(output.phone);
+            } else if (output.state === "truck_open_close") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppTruckOpenCloseButtons(output.phone);
+            } else if (output.state === "truck_remarks") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppTruckRemarksButtons(output.phone);
+            } else if (output.state === "trailer_dim_type") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppTrailerDimButtons(output.phone);
+            } else if (output.state === "trailer_bed_type") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppTrailerBedButtons(output.phone);
+            } else if (output.state === "trailer_model") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppTrailerModelButtons(output.phone);
             } else if (output.state === "loading_date" && WHATSAPP_FLOW_ID) {
               try {
                 await sendWhatsAppFlowDatePicker(output.phone, WHATSAPP_FLOW_ID);
@@ -1720,6 +2300,11 @@ serve(async (req: Request) => {
                 empty_yard: parsedData.emptyYard || "",
                 stuffing_address: parsedData.stuffingAddress || "",
                 port_cfs: parsedData.portCfs || "",
+                body_type: parsedData.bodyType || "",
+                open_close: parsedData.openClose || "",
+                trailer_bed_type: parsedData.trailerBedType || "",
+                trailer_dim_type: parsedData.trailerDimType || "",
+                remarks: parsedData.remarks || "",
               });
             } else if (output.flowType === "provider") {
               await supabase.from("provide_vehicle").upsert({

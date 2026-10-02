@@ -81,6 +81,11 @@ function mapBookToJS(dbRow) {
     emptyYard: dbRow.empty_yard,
     stuffingAddress: dbRow.stuffing_address,
     portCfs: dbRow.port_cfs,
+    bodyType: dbRow.body_type,
+    openClose: dbRow.open_close,
+    trailerBedType: dbRow.trailer_bed_type,
+    trailerDimType: dbRow.trailer_dim_type,
+    remarks: dbRow.remarks,
   };
 }
 
@@ -111,6 +116,11 @@ function mapBookToDB(jsRow) {
     empty_yard: jsRow.emptyYard || '',
     stuffing_address: jsRow.stuffingAddress || '',
     port_cfs: jsRow.portCfs || '',
+    body_type: jsRow.bodyType || '',
+    open_close: jsRow.openClose || '',
+    trailer_bed_type: jsRow.trailerBedType || '',
+    trailer_dim_type: jsRow.trailerDimType || '',
+    remarks: jsRow.remarks || '',
   };
 }
 
