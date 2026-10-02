@@ -432,7 +432,8 @@ async function sendWhatsAppFcl40VehicleButtons(to: string, containerName: string
   return data;
 }
 
-async function sendWhatsAppTempoBodyButtons(to: string) {
+async function sendWhatsAppCargoTypeButtons(to: string, bodyText: string) {
+  const cleanBody = (bodyText || "📦 Select *Cargo Type*:").trim();
   const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
   const res = await fetch(url, {
     method: "POST",
@@ -446,20 +447,132 @@ async function sendWhatsAppTempoBodyButtons(to: string) {
       type: "interactive",
       interactive: {
         type: "button",
-        body: { text: "🚚 Select *Tempo Body Type*:\n\n1️⃣ Open\n2️⃣ Cover / Closed\n3️⃣ Container" },
-        footer: { text: "Reply Back to edit Tempo Size" },
+        body: { text: cleanBody },
         action: {
           buttons: [
-            { type: "reply", reply: { id: "1", title: "Open" } },
-            { type: "reply", reply: { id: "2", title: "Cover / Closed" } },
-            { type: "reply", reply: { id: "3", title: "Container" } },
+            { type: "reply", reply: { id: "1", title: "1️⃣ Domestic" } },
+            { type: "reply", reply: { id: "2", title: "2️⃣ Import" } },
+            { type: "reply", reply: { id: "3", title: "3️⃣ Export" } },
           ],
         },
       },
     }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) console.error("❌ WhatsApp Tempo Body Buttons error:", { status: res.status, data });
+  if (!res.ok) console.error("❌ WhatsApp Cargo Type Buttons error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppVehicleTypeList(to: string, bodyText?: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "list",
+        body: { text: bodyText || "🚛 Select *Vehicle Type*:" },
+        action: {
+          button: "Choose Vehicle",
+          sections: [
+            {
+              title: "Vehicle Categories",
+              rows: [
+                { id: "1", title: "1️⃣ Tempo", description: "For small loads (1 - 10 MT)" },
+                { id: "2", title: "2️⃣ Truck", description: "Open / Closed (12 - 40 MT)" },
+                { id: "3", title: "3️⃣ Container", description: "32 Ft SXL / MXL Close Body" },
+                { id: "4", title: "4️⃣ Trailer / ODC", description: "Trailer & Over Dimension" },
+                { id: "back", title: "⬅️ Back", description: "Return to Cargo Type" },
+              ],
+            },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Vehicle Type List error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppTempoSizeList(to: string, bodyText?: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "list",
+        body: { text: bodyText || "🚚 Select *Tempo Capacity & Size*:" },
+        action: {
+          button: "Choose Tempo Size",
+          sections: [
+            {
+              title: "Available Sizes",
+              rows: [
+                { id: "1", title: "1️⃣ 1 MT", description: "Size: 8 × 5 × 5 ft" },
+                { id: "2", title: "2️⃣ 3 MT", description: "Size: 14 × 6 × 6 ft" },
+                { id: "3", title: "3️⃣ 6 MT", description: "Size: 19 × 7 × 7 ft" },
+                { id: "4", title: "4️⃣ 10 MT", description: "Size: 20 × 7 × 7 ft" },
+                { id: "back", title: "⬅️ Back", description: "Return to Vehicle Type" },
+              ],
+            },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Tempo Size List error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppTempoBodyList(to: string, bodyText?: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "list",
+        body: { text: bodyText || "🚚 Select *Tempo Body Type*:" },
+        action: {
+          button: "Choose Body Type",
+          sections: [
+            {
+              title: "Body Types",
+              rows: [
+                { id: "1", title: "1️⃣ Open", description: "Open body tempo" },
+                { id: "2", title: "2️⃣ Cover / Closed", description: "Covered / Closed body" },
+                { id: "3", title: "3️⃣ Container", description: "Container body tempo" },
+                { id: "back", title: "⬅️ Back", description: "Return to Tempo Size" },
+              ],
+            },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Tempo Body List error:", { status: res.status, data });
   return data;
 }
 
@@ -848,7 +961,11 @@ async function processConversation(chat: any, masterRows: any[]) {
     } else if (state === "fcl_type") {
       delete data.cargoType;
       state = "cargo_type";
-      response = "📦 Select *Cargo Type*:\n1️⃣ Domestic\n2️⃣ Import\n3️⃣ Export\n\nReply with *1, 2 or 3*\n\n_(Reply *Back* to edit Unloading Pincode)_";
+      response =
+        (data.unloadingLocation
+          ? `✅ *Unloading Location:* ${data.unloadingLocation}\n🛣️ *Route:* ${data.loadingDistrict || data.loadingPin} ➔ ${data.unloadingDistrict || data.unloadingPin}\n\n`
+          : "") +
+        `📦 Select *Cargo Type*:`;
     } else if (state === "fcl_20_container" || state === "fcl_40_container") {
       delete data.fclType;
       delete data.vehicleType;
@@ -941,26 +1058,22 @@ async function processConversation(chat: any, masterRows: any[]) {
     } else if (state === "vehicle_type") {
       delete data.cargoType;
       state = "cargo_type";
-      response = "📦 Select *Cargo Type*:\n1️⃣ Domestic\n2️⃣ Import\n3️⃣ Export\n\nReply with *1, 2 or 3*\n\n_(Reply *Back* to edit Unloading Pincode)_";
+      response =
+        `✅ *Unloading Location:* ${data.unloadingLocation || data.unloadingPin}\n` +
+        `🛣️ *Route:* ${data.loadingDistrict || data.loadingPin} ➔ ${data.unloadingDistrict || data.unloadingPin}\n\n` +
+        `📦 Select *Cargo Type*:`;
     } else if (state === "tempo_type") {
       delete data.vehicleType;
       state = "vehicle_type";
-      response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
+      response = "🚛 Select *Vehicle Type*:";
     } else if (state === "tempo_body_type") {
       delete data.vehicleSubType;
       state = "tempo_type";
-      response =
-        "🚚 Select *Tempo Capacity & Size*:\n\n" +
-        "1️⃣ 1 MT (Size 8 × 5 × 5 ft)\n" +
-        "2️⃣ 3 MT (Size 14 × 6 × 6 ft)\n" +
-        "3️⃣ 6 MT (Size 19 × 7 × 7 ft)\n" +
-        "4️⃣ 10 MT (Size 20 × 7 × 7 ft)\n\n" +
-        "Reply with *1, 2, 3 or 4*\n\n" +
-        "_(Reply *Back* to edit Vehicle Type)_";
+      response = "🚚 Select *Tempo Capacity & Size*:";
     } else if (state === "truck_type") {
       delete data.vehicleType;
       state = "vehicle_type";
-      response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
+      response = "🚛 Select *Vehicle Type*:";
     } else if (state === "truck_body_type") {
       delete data.vehicleSubType;
       state = "truck_type";
@@ -985,11 +1098,11 @@ async function processConversation(chat: any, masterRows: any[]) {
     } else if (state === "container_type") {
       delete data.vehicleType;
       state = "vehicle_type";
-      response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
+      response = "🚛 Select *Vehicle Type*:";
     } else if (state === "trailer_dim_type") {
       delete data.vehicleType;
       state = "vehicle_type";
-      response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
+      response = "🚛 Select *Vehicle Type*:";
     } else if (state === "trailer_bed_type") {
       delete data.trailerDimType;
       state = "trailer_dim_type";
@@ -1014,7 +1127,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       } else if (data.vehicleType === "Tempo") {
         delete data.bodyType;
         state = "tempo_body_type";
-        response = "";
+        response = "🚚 Select *Tempo Body Type*:";
       } else if (data.vehicleType === "Truck") {
         delete data.remarks;
         state = "truck_remarks";
@@ -1040,7 +1153,7 @@ async function processConversation(chat: any, masterRows: any[]) {
           "_(Reply *Back* to edit Trailer Model)_";
       } else {
         state = "vehicle_type";
-        response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
+        response = "🚛 Select *Vehicle Type*:";
       }
     } else if (state === "loading_date") {
       delete data.loadingDate;
@@ -1236,9 +1349,7 @@ async function processConversation(chat: any, masterRows: any[]) {
         response =
           `✅ *Unloading Location:* ${pinResult.location}\n` +
           `🛣️ *Route:* ${data.loadingDistrict || data.loadingPin} ➔ ${pinResult.district || message}\n\n` +
-          `📦 Select *Cargo Type*:\n1️⃣ Domestic\n2️⃣ Import\n3️⃣ Export\n\n` +
-          `Reply with *1, 2 or 3*\n\n` +
-          `_(Reply *Back* to edit Unloading Pincode)_`;
+          `📦 Select *Cargo Type*:`;
       } else {
         response =
           `❌ *Pincode Not Found:* No postal records found for *${message}* in India.\n\n` +
@@ -1252,7 +1363,7 @@ async function processConversation(chat: any, masterRows: any[]) {
     if (message === "1" || /domestic/i.test(message)) {
       data.cargoType = "Domestic";
       state = "vehicle_type";
-      response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
+      response = "🚛 Select *Vehicle Type*:";
     } else if (message === "2" || /import/i.test(message)) {
       data.cargoType = "Import";
       state = "fcl_type";
@@ -1262,7 +1373,11 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "fcl_type";
       response = "";
     } else {
-      response = "❌ Invalid choice. Reply with *1* (Domestic), *2* (Import), or *3* (Export):\n\n_(Reply *Back* to edit Unloading Pincode)_";
+      response =
+        (data.unloadingLocation
+          ? `✅ *Unloading Location:* ${data.unloadingLocation}\n🛣️ *Route:* ${data.loadingDistrict || data.loadingPin} ➔ ${data.unloadingDistrict || data.unloadingPin}\n\n`
+          : "") +
+        "❌ Please select Cargo Type using buttons below:\n\n📦 Select *Cargo Type*:";
     }
   } else if (state === "fcl_type") {
     if (message === "1" || /20|fcl\s*20/i.test(message)) {
@@ -1412,14 +1527,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       delete data.vehicleSubType;
       delete data.bodyType;
       state = "tempo_type";
-      response =
-        "🚚 Select *Tempo Capacity & Size*:\n\n" +
-        "1️⃣ 1 MT (Size 8 × 5 × 5 ft)\n" +
-        "2️⃣ 3 MT (Size 14 × 6 × 6 ft)\n" +
-        "3️⃣ 6 MT (Size 19 × 7 × 7 ft)\n" +
-        "4️⃣ 10 MT (Size 20 × 7 × 7 ft)\n\n" +
-        "Reply with *1, 2, 3 or 4*\n\n" +
-        "_(Reply *Back* to edit Vehicle Type)_";
+      response = "🚚 Select *Tempo Capacity & Size*:";
     } else if (message === "2" || /truck/i.test(message)) {
       data.vehicleType = "Truck";
       delete data.vehicleSubType;
@@ -1458,43 +1566,31 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "trailer_dim_type";
       response = "";
     } else {
-      response =
-        "❌ Invalid choice. Reply with *1, 2, 3 or 4*:\n\n" +
-        "1️⃣ Tempo\n" +
-        "2️⃣ Truck\n" +
-        "3️⃣ Container\n" +
-        "4️⃣ Trailer / ODC\n\n" +
-        "_(Reply *Back* to edit Cargo Type)_";
+      response = "❌ Please select Vehicle Type from the menu below:";
     }
   } else if (state === "tempo_type") {
     if (message === "1" || /1\s*mt|8\*5\*5/i.test(message)) {
       data.vehicleSubType = "1 MT (8x5x5 ft)";
       data.weight = "1 MT";
       state = "tempo_body_type";
-      response = "";
+      response = "🚚 Select *Tempo Body Type*:";
     } else if (message === "2" || /3\s*mt|14\*6\*6/i.test(message)) {
       data.vehicleSubType = "3 MT (14x6x6 ft)";
       data.weight = "3 MT";
       state = "tempo_body_type";
-      response = "";
+      response = "🚚 Select *Tempo Body Type*:";
     } else if (message === "3" || /6\s*mt|19\*7\*7/i.test(message)) {
       data.vehicleSubType = "6 MT (19x7x7 ft)";
       data.weight = "6 MT";
       state = "tempo_body_type";
-      response = "";
+      response = "🚚 Select *Tempo Body Type*:";
     } else if (message === "4" || /10\s*mt|20\*7\*7/i.test(message)) {
       data.vehicleSubType = "10 MT (20x7x7 ft)";
       data.weight = "10 MT";
       state = "tempo_body_type";
-      response = "";
+      response = "🚚 Select *Tempo Body Type*:";
     } else {
-      response =
-        "❌ Invalid choice. Reply with *1, 2, 3 or 4*:\n\n" +
-        "1️⃣ 1 MT (Size 8 × 5 × 5 ft)\n" +
-        "2️⃣ 3 MT (Size 14 × 6 × 6 ft)\n" +
-        "3️⃣ 6 MT (Size 19 × 7 × 7 ft)\n" +
-        "4️⃣ 10 MT (Size 20 × 7 × 7 ft)\n\n" +
-        "_(Reply *Back* to edit Vehicle Type)_";
+      response = "❌ Please select Tempo Size from the menu below:";
     }
   } else if (state === "tempo_body_type") {
     if (message === "1" || /open/i.test(message)) {
@@ -1510,12 +1606,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "material";
       response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Tempo Body Type)_";
     } else {
-      response =
-        "❌ Please select Tempo Body Type using buttons below:\n\n" +
-        "1️⃣ Open\n" +
-        "2️⃣ Cover / Closed\n" +
-        "3️⃣ Container\n\n" +
-        "_(Reply *Back* to edit Tempo Size)_";
+      response = "❌ Please select Tempo Body Type from the menu below:";
     }
   } else if (state === "truck_type") {
     if (message === "1" || /12\s*mt/i.test(message)) {
@@ -2177,7 +2268,24 @@ serve(async (req: Request) => {
               parsedData = {};
             }
 
-            if (output.state === "fcl_type") {
+            if (output.state === "cargo_type") {
+              await sendWhatsAppCargoTypeButtons(output.phone, output.response);
+            } else if (output.state === "vehicle_type") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppVehicleTypeList(output.phone, output.response);
+            } else if (output.state === "tempo_type") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppTempoSizeList(output.phone, output.response);
+            } else if (output.state === "tempo_body_type") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppTempoBodyList(output.phone, output.response);
+            } else if (output.state === "fcl_type") {
               if (output.response && output.response.startsWith("❌")) {
                 await sendWhatsAppText(output.phone, output.response);
               }
@@ -2197,11 +2305,6 @@ serve(async (req: Request) => {
                 await sendWhatsAppText(output.phone, output.response);
               }
               await sendWhatsAppFcl40VehicleButtons(output.phone, parsedData.containerType || "FCL 40");
-            } else if (output.state === "tempo_body_type") {
-              if (output.response && output.response.startsWith("❌")) {
-                await sendWhatsAppText(output.phone, output.response);
-              }
-              await sendWhatsAppTempoBodyButtons(output.phone);
             } else if (output.state === "truck_body_type") {
               if (output.response && output.response.startsWith("❌")) {
                 await sendWhatsAppText(output.phone, output.response);
