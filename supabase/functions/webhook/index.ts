@@ -307,6 +307,130 @@ async function sendWhatsAppMainMenuButtons(to: string) {
   return data;
 }
 
+async function sendWhatsAppFclTypeButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "🚛 Enter required vehicle transport type detail:" },
+        footer: { text: "Reply Back to edit Cargo Type" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "1", title: "🔹 FCL 20" } },
+            { type: "reply", reply: { id: "2", title: "🔹 FCL 40" } },
+            { type: "reply", reply: { id: "back", title: "⬅️ Back" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp FCL Type Buttons error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppFcl20ContainerButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "📦 Select *FCL 20* Container Type:" },
+        footer: { text: "Reply Back to edit FCL Size" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "1", title: "1️⃣ 20 GP" } },
+            { type: "reply", reply: { id: "2", title: "2️⃣ 20 FLEXI" } },
+            { type: "reply", reply: { id: "3", title: "3️⃣ 20 TANK" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp FCL 20 Container Buttons error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppFcl40ContainerButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: "📦 Select *FCL 40* Container Type:" },
+        footer: { text: "Reply Back to edit FCL Size" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "1", title: "1️⃣ 40 HC" } },
+            { type: "reply", reply: { id: "2", title: "2️⃣ 40 Open Top" } },
+            { type: "reply", reply: { id: "3", title: "3️⃣ 40 FR" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp FCL 40 Container Buttons error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppFcl40VehicleButtons(to: string, containerName: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: `🚛 Select Vehicle / Trailer for *${containerName}*:\n\n1️⃣ 3518 (24 MT + Container)\n2️⃣ 4018 (29 MT + Container)\n3️⃣ AMW (30 MT + Container)` },
+        footer: { text: "Reply Back to edit Container" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "1", title: "3518 (24 MT+Cont)" } },
+            { type: "reply", reply: { id: "2", title: "4018 (29 MT+Cont)" } },
+            { type: "reply", reply: { id: "3", title: "AMW (30 MT+Cont)" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp FCL 40 Vehicle Buttons error:", { status: res.status, data });
+  return data;
+}
+
 async function sendWhatsAppWithBackButton(to: string, text: string) {
   // Strip _(Reply *Back* to ...)_ hint — we show a real button instead
   const cleanText = text.replace(/\n*_?\(Reply \*Back\* to [^)]+\)_?/g, "").trim();
@@ -506,6 +630,99 @@ async function processConversation(chat: any, masterRows: any[]) {
       delete data.unloadingState;
       state = "unloading_pin";
       response = "📍 Enter *Unloading Pincode* (6 digits):\n(e.g., 560001)\n\n_(Reply *Back* to edit Loading Pincode)_";
+    } else if (state === "fcl_type") {
+      delete data.cargoType;
+      state = "cargo_type";
+      response = "📦 Select *Cargo Type*:\n1️⃣ Domestic\n2️⃣ Import\n3️⃣ Export\n\nReply with *1, 2 or 3*\n\n_(Reply *Back* to edit Unloading Pincode)_";
+    } else if (state === "fcl_20_container" || state === "fcl_40_container") {
+      delete data.fclType;
+      delete data.vehicleType;
+      state = "fcl_type";
+      response = "";
+    } else if (state === "fcl_20_vehicle") {
+      delete data.vehicleSubType;
+      state = "fcl_20_container";
+      response = "";
+    } else if (state === "fcl_40_vehicle") {
+      delete data.vehicleSubType;
+      state = "fcl_40_container";
+      response = "";
+    } else if (state === "cargo_weight") {
+      delete data.weight;
+      if (data.fclType === "FCL 20") {
+        if (data.containerType === "20 GP") {
+          state = "fcl_20_vehicle";
+          response =
+            "🚛 Select Vehicle / Trailer for *20 GP*:\n\n" +
+            "1️⃣ 6 Tyre Tuskar (07 MT + Container)\n" +
+            "2️⃣ 10 Tyre Taurus (16 MT + Container)\n" +
+            "3️⃣ 12 Tyre Taurus (22 MT + Container)\n" +
+            "4️⃣ 14 Tyre Taurus (28 MT + Container)\n" +
+            "5️⃣ 4018 Trailer (30 MT + Container)\n\n" +
+            "Reply with *1 - 5*\n\n" +
+            "_(Reply *Back* to edit Container Type)_";
+        } else {
+          state = "fcl_20_container";
+          response = "";
+        }
+      } else {
+        state = "fcl_40_vehicle";
+        response = "";
+      }
+    } else if (state === "cargo_dimension") {
+      delete data.dimensions;
+      state = "material";
+      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Cargo Weight)_";
+    } else if (state === "import_loading_yard") {
+      delete data.loadingYard;
+      if (data.containerType === "40 Open top" || data.containerType === "40 FR") {
+        state = "cargo_dimension";
+        response =
+          "📐 Enter Cargo Dimensions / *Size (L x W x H)*:\n" +
+          "(e.g., 38 x 8 x 9.5 Ft  or  11.5 x 2.4 x 2.8 Meters)\n\n" +
+          "💡 _Tip: Specify Length x Width x Height. Type *Standard* if within normal height._\n\n" +
+          "_(Reply *Back* to edit Material Description)_";
+      } else {
+        state = "material";
+        response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Cargo Weight)_";
+      }
+    } else if (state === "import_line_name") {
+      delete data.shippingLine;
+      state = "import_loading_yard";
+      response = "👉 Enter *Loading (JNPT) Yard / CFS*:\n(e.g., Speedy CFS, JWR CFS, Gateway Distriparks)\n\n_(Reply *Back* to edit previous step)_";
+    } else if (state === "import_unloading_address") {
+      delete data.unloadingAddress;
+      state = "import_line_name";
+      response = "👉 Enter *Line Name* (Shipping Line):\n(e.g., Maersk, MSC, CMA CGM, Hapag-Lloyd, ONE)\n\n_(Reply *Back* to edit Loading Yard)_";
+    } else if (state === "import_empty_yard") {
+      delete data.emptyYard;
+      state = "import_unloading_address";
+      response = "👉 Enter *Unloading Delivery Address*:\n(e.g., Plot 45, Sector 8, MIDC Rabale, Navi Mumbai)\n\n_(Reply *Back* to edit Line Name)_";
+    } else if (state === "export_empty_yard") {
+      delete data.emptyYard;
+      if (data.containerType === "40 Open top" || data.containerType === "40 FR") {
+        state = "cargo_dimension";
+        response =
+          "📐 Enter Cargo Dimensions / *Size (L x W x H)*:\n" +
+          "(e.g., 38 x 8 x 9.5 Ft  or  11.5 x 2.4 x 2.8 Meters)\n\n" +
+          "💡 _Tip: Specify Length x Width x Height. Type *Standard* if within normal height._\n\n" +
+          "_(Reply *Back* to edit Material Description)_";
+      } else {
+        state = "material";
+        response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Cargo Weight)_";
+      }
+    } else if (state === "export_line_name") {
+      delete data.shippingLine;
+      state = "export_empty_yard";
+      response = "👉 Enter *Empty Pick Up Yard (JNPT)*:\n(e.g., Ameya CFS, Dronagiri Yard, Speedy CFS)\n\n_(Reply *Back* to edit previous step)_";
+    } else if (state === "export_stuffing_address") {
+      delete data.stuffingAddress;
+      state = "export_line_name";
+      response = "👉 Enter *Lines* (Shipping Line Name):\n(e.g., Maersk, MSC, CMA CGM, Hapag-Lloyd, ONE)\n\n_(Reply *Back* to edit Empty Pick Up Yard)_";
+    } else if (state === "export_unloading_port") {
+      delete data.portCfs;
+      state = "export_stuffing_address";
+      response = "👉 Enter *Stuffing Address* (Factory / Warehouse):\n(e.g., Survey 102, GIDC Sachin, Surat, Gujarat)\n\n_(Reply *Back* to edit Lines)_";
     } else if (state === "vehicle_type") {
       delete data.cargoType;
       state = "cargo_type";
@@ -515,7 +732,15 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "vehicle_type";
       response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
     } else if (state === "material") {
-      if (data.vehicleType === "Trailer / ODC") {
+      if (data.cargoType === "Import" || data.cargoType === "Export") {
+        delete data.material;
+        state = "cargo_weight";
+        response =
+          "⚖️ Enter Cargo *Weight*:\n" +
+          "(e.g., 18 MT, 24 MT, or 20000 kg)\n\n" +
+          "ℹ️ _(Note: 1000 kg = 1 MT)_\n\n" +
+          "_(Reply *Back* to edit Vehicle Selection)_";
+      } else if (data.vehicleType === "Trailer / ODC") {
         delete data.vehicleType;
         delete data.vehicleSubType;
         state = "vehicle_type";
@@ -537,13 +762,22 @@ async function processConversation(chat: any, masterRows: any[]) {
         response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*";
       }
     } else if (state === "loading_date") {
-      delete data.material;
-      state = "material";
-      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Vehicle Size)_";
+      delete data.loadingDate;
+      if (data.cargoType === "Import") {
+        state = "import_empty_yard";
+        response = "👉 Enter *Empty (JNPT) Yard* _(Optional)_:\n(e.g., Ocean Gate CFS, Apollo Yard, or type *Skip* if not yet allocated)\n\n_(Reply *Back* to edit Unloading Address)_";
+      } else if (data.cargoType === "Export") {
+        state = "export_unloading_port";
+        response = "👉 Enter *Unloading in JNPT (Port / CFS)*:\n(e.g., BMCT Port, GTI Port, NSICT, or Central CFS)\n\n_(Reply *Back* to edit Stuffing Address)_";
+      } else {
+        delete data.material;
+        state = "material";
+        response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Vehicle Size)_";
+      }
     } else if (state === "loading_time") {
       delete data.loadingDate;
       state = "loading_date";
-      response = "📅 Enter *Loading Date* (DD/MM/YYYY):\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit Material Description)_";
+      response = "📅 Enter *Loading Date* (DD/MM/YYYY):\n(e.g., 25/09/2026)\n\n_(Reply *Back* to previous step)_";
     } else if (state === "company") {
       delete data.loadingTime;
       state = "loading_time";
@@ -734,12 +968,162 @@ async function processConversation(chat: any, masterRows: any[]) {
       response = "❌ Invalid pincode format. Please enter a valid *6-digit* Unloading Pincode:\n(e.g., 560001)\n\n_(Reply *Back* to edit Loading Pincode)_";
     }
   } else if (state === "cargo_type") {
-    if (["1", "2", "3"].includes(message)) {
-      data.cargoType = cargoTypeMap[message];
+    if (message === "1" || /domestic/i.test(message)) {
+      data.cargoType = "Domestic";
       state = "vehicle_type";
       response = "🚛 Select *Vehicle Type*:\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*\n\n_(Reply *Back* to edit Cargo Type)_";
+    } else if (message === "2" || /import/i.test(message)) {
+      data.cargoType = "Import";
+      state = "fcl_type";
+      response = "";
+    } else if (message === "3" || /export/i.test(message)) {
+      data.cargoType = "Export";
+      state = "fcl_type";
+      response = "";
     } else {
       response = "❌ Invalid choice. Reply with *1* (Domestic), *2* (Import), or *3* (Export):\n\n_(Reply *Back* to edit Unloading Pincode)_";
+    }
+  } else if (state === "fcl_type") {
+    if (message === "1" || /20|fcl\s*20/i.test(message)) {
+      data.fclType = "FCL 20";
+      data.vehicleType = "FCL 20";
+      state = "fcl_20_container";
+      response = "";
+    } else if (message === "2" || /40|fcl\s*40/i.test(message)) {
+      data.fclType = "FCL 40";
+      data.vehicleType = "FCL 40";
+      state = "fcl_40_container";
+      response = "";
+    } else {
+      response = "❌ Invalid choice. Please select *FCL 20* or *FCL 40* using the buttons below:\n\n_(Reply *Back* to edit Cargo Type)_";
+    }
+  } else if (state === "fcl_20_container") {
+    if (message === "1" || /gp|20\s*gp/i.test(message)) {
+      data.containerType = "20 GP";
+      data.vehicleType = "FCL 20 (20 GP)";
+      state = "fcl_20_vehicle";
+      response =
+        "🚛 Select Vehicle / Trailer for *20 GP*:\n\n" +
+        "1️⃣ 6 Tyre Tuskar (07 MT + Container)\n" +
+        "2️⃣ 10 Tyre Taurus (16 MT + Container)\n" +
+        "3️⃣ 12 Tyre Taurus (22 MT + Container)\n" +
+        "4️⃣ 14 Tyre Taurus (28 MT + Container)\n" +
+        "5️⃣ 4018 Trailer (30 MT + Container)\n\n" +
+        "Reply with *1 - 5*\n\n" +
+        "_(Reply *Back* to edit Container Type)_";
+    } else if (message === "2" || /flexi|20\s*flexi/i.test(message)) {
+      data.containerType = "20 FLEXI";
+      data.vehicleType = "FCL 20 (20 FLEXI)";
+      data.vehicleSubType = "20 FLEXI Container";
+      state = "cargo_weight";
+      response =
+        "⚖️ Enter Cargo *Weight*:\n" +
+        "(e.g., 18 MT, 24 MT, or 20000 kg)\n\n" +
+        "ℹ️ _(Note: 1000 kg = 1 MT)_\n\n" +
+        "_(Reply *Back* to edit Container Type)_";
+    } else if (message === "3" || /tank|20\s*tank/i.test(message)) {
+      data.containerType = "20 TANK";
+      data.vehicleType = "FCL 20 (20 TANK)";
+      data.vehicleSubType = "20 TANK Container";
+      state = "cargo_weight";
+      response =
+        "⚖️ Enter Cargo *Weight*:\n" +
+        "(e.g., 18 MT, 24 MT, or 20000 kg)\n\n" +
+        "ℹ️ _(Note: 1000 kg = 1 MT)_\n\n" +
+        "_(Reply *Back* to edit Container Type)_";
+    } else {
+      response = "❌ Invalid choice. Please select *20 GP*, *20 FLEXI*, or *20 TANK* using the buttons below:\n\n_(Reply *Back* to edit FCL Size)_";
+    }
+  } else if (state === "fcl_20_vehicle") {
+    const fcl20VehicleMap: Record<string, string> = {
+      "1": "6 Tyre Tuskar (07 MT + Container)",
+      "2": "10 Tyre Taurus (16 MT + Container)",
+      "3": "12 Tyre Taurus (22 MT + Container)",
+      "4": "14 Tyre Taurus (28 MT + Container)",
+      "5": "4018 Trailer (30 MT + Container)",
+    };
+    let sub = fcl20VehicleMap[message];
+    if (!sub) {
+      if (/6\s*tyre|tuskar/i.test(message)) sub = fcl20VehicleMap["1"];
+      else if (/10\s*tyre/i.test(message)) sub = fcl20VehicleMap["2"];
+      else if (/12\s*tyre/i.test(message)) sub = fcl20VehicleMap["3"];
+      else if (/14\s*tyre/i.test(message)) sub = fcl20VehicleMap["4"];
+      else if (/4018|trailer/i.test(message)) sub = fcl20VehicleMap["5"];
+    }
+
+    if (sub) {
+      data.vehicleSubType = sub;
+      state = "cargo_weight";
+      response =
+        "⚖️ Enter Cargo *Weight*:\n" +
+        "(e.g., 18 MT, 24 MT, or 20000 kg)\n\n" +
+        "ℹ️ _(Note: 1000 kg = 1 MT)_\n\n" +
+        "_(Reply *Back* to edit Vehicle Selection)_";
+    } else {
+      response =
+        "❌ Invalid choice. Reply with *1 - 5*:\n\n" +
+        "1️⃣ 6 Tyre Tuskar (07 MT + Container)\n" +
+        "2️⃣ 10 Tyre Taurus (16 MT + Container)\n" +
+        "3️⃣ 12 Tyre Taurus (22 MT + Container)\n" +
+        "4️⃣ 14 Tyre Taurus (28 MT + Container)\n" +
+        "5️⃣ 4018 Trailer (30 MT + Container)\n\n" +
+        "_(Reply *Back* to edit Container Type)_";
+    }
+  } else if (state === "fcl_40_container") {
+    if (message === "1" || /hc|40\s*hc/i.test(message)) {
+      data.containerType = "40 HC";
+      data.vehicleType = "FCL 40 (40 HC)";
+      state = "fcl_40_vehicle";
+      response = "";
+    } else if (message === "2" || /open|open\s*top|40\s*open/i.test(message)) {
+      data.containerType = "40 Open top";
+      data.vehicleType = "FCL 40 (40 Open top)";
+      state = "fcl_40_vehicle";
+      response = "";
+    } else if (message === "3" || /fr|flat\s*rack|40\s*fr/i.test(message)) {
+      data.containerType = "40 FR";
+      data.vehicleType = "FCL 40 (40 FR)";
+      state = "fcl_40_vehicle";
+      response = "";
+    } else {
+      response = "❌ Invalid choice. Please select *40 HC*, *40 Open Top*, or *40 FR* using the buttons below:\n\n_(Reply *Back* to edit FCL Size)_";
+    }
+  } else if (state === "fcl_40_vehicle") {
+    const fcl40VehicleMap: Record<string, string> = {
+      "1": "3518 (24 MT + Container)",
+      "2": "4018 (29 MT + Container)",
+      "3": "AMW (30 MT + Container)",
+    };
+    let sub = fcl40VehicleMap[message];
+    if (!sub) {
+      if (/3518/i.test(message)) sub = fcl40VehicleMap["1"];
+      else if (/4018/i.test(message)) sub = fcl40VehicleMap["2"];
+      else if (/amw/i.test(message)) sub = fcl40VehicleMap["3"];
+    }
+
+    if (sub) {
+      data.vehicleSubType = sub;
+      state = "cargo_weight";
+      response =
+        "⚖️ Enter Cargo *Weight*:\n" +
+        "(e.g., 18 MT, 24 MT, or 25000 kg)\n\n" +
+        "ℹ️ _(Note: 1000 kg = 1 MT)_\n\n" +
+        "_(Reply *Back* to edit Vehicle Selection)_";
+    } else {
+      response =
+        "❌ Invalid choice. Please select vehicle/trailer using the buttons below:\n\n" +
+        "1️⃣ 3518 (24 MT + Container)\n" +
+        "2️⃣ 4018 (29 MT + Container)\n" +
+        "3️⃣ AMW (30 MT + Container)\n\n" +
+        "_(Reply *Back* to edit Container Type)_";
+    }
+  } else if (state === "cargo_weight") {
+    if (message.trim().length >= 1 && /[0-9]/.test(message)) {
+      data.weight = message.trim();
+      state = "material";
+      response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, Chemicals, FMCG)\n\n_(Reply *Back* to edit Cargo Weight)_";
+    } else {
+      response = "❌ Please enter a valid *Cargo Weight*:\n(e.g., 18 MT, 24 MT, or 25000 kg)\n\nℹ️ _(Note: 1000 kg = 1 MT)_\n\n_(Reply *Back* to edit Vehicle Selection)_";
     }
   } else if (state === "vehicle_type") {
     if (message === "1") {
@@ -794,21 +1178,114 @@ async function processConversation(chat: any, masterRows: any[]) {
     const isValidLength = message.trim().length >= 2;
     if (hasLetters && isValidLength) {
       data.material = message.trim();
-      state = "loading_date";
-      response = "📅 Enter *Loading Date* (DD/MM/YYYY):\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit Material Description)_";
+      if (data.cargoType === "Import" || data.cargoType === "Export") {
+        if (data.containerType === "40 Open top" || data.containerType === "40 FR") {
+          state = "cargo_dimension";
+          response =
+            "📐 Enter Cargo Dimensions / *Size (L x W x H)*:\n" +
+            "(e.g., 38 x 8 x 9.5 Ft  or  11.5 x 2.4 x 2.8 Meters)\n\n" +
+            "💡 _Tip: Specify Length x Width x Height. Type *Standard* if within normal container height._\n\n" +
+            "_(Reply *Back* to edit Material Description)_";
+        } else if (data.cargoType === "Import") {
+          state = "import_loading_yard";
+          response = "👉 Enter *Loading (JNPT) Yard / CFS*:\n(e.g., Speedy CFS, JWR CFS, Gateway Distriparks, Punjab Conware)\n\n_(Reply *Back* to edit Material Description)_";
+        } else {
+          state = "export_empty_yard";
+          response = "👉 Enter *Empty Pick Up Yard (JNPT)*:\n(e.g., Ameya CFS, Dronagiri Yard, Speedy CFS, Seabird CFS)\n\n_(Reply *Back* to edit Material Description)_";
+        }
+      } else {
+        state = "loading_date";
+        response = "📅 Enter *Loading Date* (DD/MM/YYYY):\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit Material Description)_";
+      }
     } else {
-      response = "❌ Invalid description. Please enter a valid *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Vehicle Size)_";
+      const prevStep = (data.cargoType === "Import" || data.cargoType === "Export") ? "Cargo Weight" : "Vehicle Size";
+      response = `❌ Invalid description. Please enter a valid *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit ${prevStep})_`;
+    }
+  } else if (state === "cargo_dimension") {
+    if (message.trim().length >= 2) {
+      data.dimensions = message.trim();
+      if (data.cargoType === "Import") {
+        state = "import_loading_yard";
+        response = "👉 Enter *Loading (JNPT) Yard / CFS*:\n(e.g., Speedy CFS, JWR CFS, Gateway Distriparks, Punjab Conware)\n\n_(Reply *Back* to edit Cargo Dimensions)_";
+      } else {
+        state = "export_empty_yard";
+        response = "👉 Enter *Empty Pick Up Yard (JNPT)*:\n(e.g., Ameya CFS, Dronagiri Yard, Speedy CFS, Seabird CFS)\n\n_(Reply *Back* to edit Cargo Dimensions)_";
+      }
+    } else {
+      response = "❌ Please enter valid *Dimensions (L x W x H)*:\n(e.g., 38 x 8 x 9.5 Ft  or  type *Standard*)\n\n_(Reply *Back* to edit Material Description)_";
+    }
+  } else if (state === "import_loading_yard") {
+    if (message.trim().length >= 2) {
+      data.loadingYard = message.trim();
+      state = "import_line_name";
+      response = "👉 Enter *Line Name* (Shipping Line):\n(e.g., Maersk, MSC, CMA CGM, Hapag-Lloyd, ONE, Cosco)\n\n_(Reply *Back* to edit Loading Yard)_";
+    } else {
+      response = "❌ Please enter a valid *Loading (JNPT) Yard / CFS*:\n(e.g., Speedy CFS, JWR CFS, Gateway Distriparks)\n\n_(Reply *Back* to previous step)_";
+    }
+  } else if (state === "import_line_name") {
+    if (message.trim().length >= 2) {
+      data.shippingLine = message.trim();
+      state = "import_unloading_address";
+      response = "👉 Enter *Unloading Delivery Address*:\n(e.g., Plot 45, Sector 8, MIDC Rabale, Navi Mumbai)\n\n_(Reply *Back* to edit Line Name)_";
+    } else {
+      response = "❌ Please enter a valid *Line Name*:\n(e.g., Maersk, MSC, CMA CGM, Hapag-Lloyd)\n\n_(Reply *Back* to edit Loading Yard)_";
+    }
+  } else if (state === "import_unloading_address") {
+    if (message.trim().length >= 3) {
+      data.unloadingAddress = message.trim();
+      state = "import_empty_yard";
+      response = "👉 Enter *Empty (JNPT) Yard* _(Optional)_:\n(e.g., Ocean Gate CFS, Apollo Yard, or type *Skip* if not yet allocated)\n\n_(Reply *Back* to edit Unloading Address)_";
+    } else {
+      response = "❌ Please enter a valid *Unloading Delivery Address*:\n(e.g., Plot 45, Sector 8, MIDC Rabale, Navi Mumbai)\n\n_(Reply *Back* to edit Line Name)_";
+    }
+  } else if (state === "import_empty_yard") {
+    const isSkip = ["skip", "na", "n/a", "none", "no"].includes(lowerMessage);
+    data.emptyYard = isSkip ? "Not specified / Pending" : message.trim();
+    state = "loading_date";
+    response = "📅 Enter *Loading Date* (DD/MM/YYYY):\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit Empty Yard)_";
+  } else if (state === "export_empty_yard") {
+    if (message.trim().length >= 2) {
+      data.emptyYard = message.trim();
+      state = "export_line_name";
+      response = "👉 Enter *Lines* (Shipping Line Name):\n(e.g., Maersk, MSC, CMA CGM, Hapag-Lloyd, ONE, Cosco)\n\n_(Reply *Back* to edit Empty Pick Up Yard)_";
+    } else {
+      response = "❌ Please enter a valid *Empty Pick Up Yard (JNPT)*:\n(e.g., Ameya CFS, Dronagiri Yard, Speedy CFS)\n\n_(Reply *Back* to previous step)_";
+    }
+  } else if (state === "export_line_name") {
+    if (message.trim().length >= 2) {
+      data.shippingLine = message.trim();
+      state = "export_stuffing_address";
+      response = "👉 Enter *Stuffing Address* (Factory / Warehouse):\n(e.g., Survey 102, GIDC Sachin, Surat, Gujarat)\n\n_(Reply *Back* to edit Lines)_";
+    } else {
+      response = "❌ Please enter a valid *Shipping Line Name*:\n(e.g., Maersk, MSC, CMA CGM, Hapag-Lloyd)\n\n_(Reply *Back* to edit Empty Pick Up Yard)_";
+    }
+  } else if (state === "export_stuffing_address") {
+    if (message.trim().length >= 3) {
+      data.stuffingAddress = message.trim();
+      state = "export_unloading_port";
+      response = "👉 Enter *Unloading in JNPT (Port / CFS)*:\n(e.g., BMCT Port, GTI Port, NSICT, or JWR CFS)\n\n_(Reply *Back* to edit Stuffing Address)_";
+    } else {
+      response = "❌ Please enter a valid *Stuffing Address*:\n(e.g., Survey 102, GIDC Sachin, Surat, Gujarat)\n\n_(Reply *Back* to edit Lines)_";
+    }
+  } else if (state === "export_unloading_port") {
+    if (message.trim().length >= 2) {
+      data.portCfs = message.trim();
+      state = "loading_date";
+      response = "📅 Enter *Loading Date* (DD/MM/YYYY):\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit Unloading Port/CFS)_";
+    } else {
+      response = "❌ Please enter valid *Unloading in JNPT (Port / CFS)*:\n(e.g., BMCT Port, GTI Port, NSICT)\n\n_(Reply *Back* to edit Stuffing Address)_";
     }
   } else if (state === "loading_date") {
     const dateCheck = validateLoadingDate(message);
+    const dateBackHint = data.cargoType === "Import" ? "Empty Yard" : (data.cargoType === "Export" ? "Unloading Port/CFS" : "Material Description");
     if (dateCheck.valid) {
       data.loadingDate = dateCheck.formatted || message.trim();
       state = "loading_time";
       response = "";
     } else if (dateCheck.reason === "past") {
-      response = "❌ Loading date cannot be in the past.\n\nPlease enter today's date or a future date in DD/MM/YYYY format:\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit Material Description)_";
+      response = `❌ Loading date cannot be in the past.\n\nPlease enter today's date or a future date in DD/MM/YYYY format:\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit ${dateBackHint})_`;
     } else {
-      response = "❌ Invalid date format.\n\nPlease enter a valid date in DD/MM/YYYY format:\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit Material Description)_";
+      response = `❌ Invalid date format.\n\nPlease enter a valid date in DD/MM/YYYY format:\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit ${dateBackHint})_`;
     }
   } else if (state === "loading_time") {
     const timeMap: Record<string, string> = {
@@ -852,12 +1329,33 @@ async function processConversation(chat: any, masterRows: any[]) {
       data.email = isSkip ? "" : message.trim();
       data.phone = phone;
       state = "cta_menu";
+
+      let logisticsDetails = "";
+      if (data.cargoType === "Import") {
+        logisticsDetails =
+          `⚓ *Import Details:*\n` +
+          `• Loading (JNPT) Yard: ${data.loadingYard || "N/A"}\n` +
+          `• Line Name: ${data.shippingLine || "N/A"}\n` +
+          `• Unloading Address: ${data.unloadingAddress || "N/A"}\n` +
+          `• Empty (JNPT) Yard: ${data.emptyYard || "Pending"}\n\n`;
+      } else if (data.cargoType === "Export") {
+        logisticsDetails =
+          `⚓ *Export Details:*\n` +
+          `• Empty Pickup Yard (JNPT): ${data.emptyYard || "N/A"}\n` +
+          `• Lines: ${data.shippingLine || "N/A"}\n` +
+          `• Stuffing Address: ${data.stuffingAddress || "N/A"}\n` +
+          `• Unloading in JNPT: ${data.portCfs || "N/A"}\n\n`;
+      }
+
       response =
         "✅ *Booking Request Submitted Successfully!*\n\n" +
         `📍 *Route:* ${data.loadingPin} (${data.loadingLocation || "Origin"}) ➔ ${data.unloadingPin} (${data.unloadingLocation || "Destination"})\n` +
-        `📦 *Cargo:* ${data.cargoType}\n` +
-        `🚛 *Vehicle:* ${data.vehicleType} (${data.vehicleSubType || "Standard"})\n` +
+        `📦 *Cargo:* ${data.cargoType}${data.fclType ? ` (${data.fclType} - ${data.containerType || ""})` : ""}\n` +
+        `🚛 *Vehicle / Trailer:* ${data.vehicleSubType || data.vehicleType || "Standard"}\n` +
+        (data.weight ? `⚖️ *Weight:* ${data.weight}\n` : "") +
         `📝 *Material:* ${data.material}\n` +
+        (data.dimensions ? `📐 *Dimensions:* ${data.dimensions}\n` : "") +
+        (logisticsDetails ? `\n${logisticsDetails}` : "") +
         `📅 *Loading Date & Time:* ${data.loadingDate}${data.loadingTime ? ` (${data.loadingTime})` : ""}\n` +
         `👤 *Contact:* ${data.contactName} (${data.company})\n` +
         (data.email ? `📧 *Email:* ${data.email}\n\n` : "\n") +
@@ -1124,7 +1622,34 @@ serve(async (req: Request) => {
 
           // 4. Send WhatsApp reply
           try {
-            if (output.state === "loading_date" && WHATSAPP_FLOW_ID) {
+            let parsedData: any = {};
+            try {
+              parsedData = JSON.parse(output.data || "{}");
+            } catch {
+              parsedData = {};
+            }
+
+            if (output.state === "fcl_type") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppFclTypeButtons(output.phone);
+            } else if (output.state === "fcl_20_container") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppFcl20ContainerButtons(output.phone);
+            } else if (output.state === "fcl_40_container") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppFcl40ContainerButtons(output.phone);
+            } else if (output.state === "fcl_40_vehicle") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppFcl40VehicleButtons(output.phone, parsedData.containerType || "FCL 40");
+            } else if (output.state === "loading_date" && WHATSAPP_FLOW_ID) {
               try {
                 await sendWhatsAppFlowDatePicker(output.phone, WHATSAPP_FLOW_ID);
               } catch (flowErr) {
@@ -1177,7 +1702,7 @@ serve(async (req: Request) => {
                 loading_pin: parsedData.loadingPin || "",
                 unloading_pin: parsedData.unloadingPin || "",
                 cargo_type: parsedData.cargoType || "",
-                vehicle_type: parsedData.vehicleType || "",
+                vehicle_type: parsedData.fclType ? `${parsedData.fclType} (${parsedData.containerType || ""})` : (parsedData.vehicleType || ""),
                 vehicle_sub_type: parsedData.vehicleSubType || "",
                 material: parsedData.material || "",
                 loading_date: (parsedData.loadingDate || "") + (parsedData.loadingTime ? ` (${parsedData.loadingTime})` : ""),
@@ -1185,6 +1710,16 @@ serve(async (req: Request) => {
                 contact_name: parsedData.contactName || "",
                 phone: parsedData.phone || phone,
                 email: parsedData.email || "",
+                weight: parsedData.weight || "",
+                fcl_type: parsedData.fclType || "",
+                container_type: parsedData.containerType || "",
+                cargo_dimensions: parsedData.dimensions || "",
+                shipping_line: parsedData.shippingLine || "",
+                loading_yard: parsedData.loadingYard || "",
+                unloading_address: parsedData.unloadingAddress || "",
+                empty_yard: parsedData.emptyYard || "",
+                stuffing_address: parsedData.stuffingAddress || "",
+                port_cfs: parsedData.portCfs || "",
               });
             } else if (output.flowType === "provider") {
               await supabase.from("provide_vehicle").upsert({

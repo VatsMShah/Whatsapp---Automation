@@ -71,6 +71,16 @@ function mapBookToJS(dbRow) {
     phone: dbRow.phone,
     email: dbRow.email,
     website: dbRow.website,
+    weight: dbRow.weight,
+    fclType: dbRow.fcl_type,
+    containerType: dbRow.container_type,
+    dimensions: dbRow.cargo_dimensions,
+    shippingLine: dbRow.shipping_line,
+    loadingYard: dbRow.loading_yard,
+    unloadingAddress: dbRow.unloading_address,
+    emptyYard: dbRow.empty_yard,
+    stuffingAddress: dbRow.stuffing_address,
+    portCfs: dbRow.port_cfs,
   };
 }
 
@@ -91,6 +101,16 @@ function mapBookToDB(jsRow) {
     phone: jsRow.phone || '',
     email: jsRow.email || '',
     website: jsRow.website || '',
+    weight: jsRow.weight || '',
+    fcl_type: jsRow.fclType || '',
+    container_type: jsRow.containerType || '',
+    cargo_dimensions: jsRow.dimensions || '',
+    shipping_line: jsRow.shippingLine || '',
+    loading_yard: jsRow.loadingYard || '',
+    unloading_address: jsRow.unloadingAddress || '',
+    empty_yard: jsRow.emptyYard || '',
+    stuffing_address: jsRow.stuffingAddress || '',
+    port_cfs: jsRow.portCfs || '',
   };
 }
 
