@@ -665,7 +665,7 @@ async function sendWhatsAppTruckRemarksButtons(to: string) {
   return data;
 }
 
-async function sendWhatsAppTrailerDimButtons(to: string) {
+async function sendWhatsAppContainerList(to: string, bodyText?: string) {
   const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
   const res = await fetch(url, {
     method: "POST",
@@ -678,24 +678,32 @@ async function sendWhatsAppTrailerDimButtons(to: string) {
       to,
       type: "interactive",
       interactive: {
-        type: "button",
-        body: { text: "🚛 Select *Trailer Cargo Dimension*:\n(Standard trailer size is 40 × 8 × 7 ft)\n\n1️⃣ Normal\n2️⃣ Over Dimension (ODC)" },
+        type: "list",
+        body: { text: bodyText || "📦 Select *32 Ft Container Type* (Size: 32 × 8 × 9 ft):" },
         action: {
-          buttons: [
-            { type: "reply", reply: { id: "1", title: "Normal" } },
-            { type: "reply", reply: { id: "2", title: "Over Dimension" } },
-            { type: "reply", reply: { id: "back", title: "⬅️ Back" } },
+          button: "Choose Container",
+          sections: [
+            {
+              title: "32 Ft Container Types",
+              rows: [
+                { id: "1", title: "1️⃣ SXL 07 - 10 MT", description: "6 Tyre (Size 32 × 8 × 9 ft)" },
+                { id: "2", title: "2️⃣ MXL 15 - 18 MT", description: "10 Tyre (Size 32 × 8 × 9 ft)" },
+                { id: "3", title: "3️⃣ MXL 21 - 25 MT", description: "12 Tyre (Size 32 × 8 × 9 ft)" },
+                { id: "4", title: "4️⃣ MXL 28 - 30 MT", description: "14 Tyre (Size 32 × 8 × 9 ft)" },
+                { id: "back", title: "⬅️ Back", description: "Return to Vehicle Type" },
+              ],
+            },
           ],
         },
       },
     }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) console.error("❌ WhatsApp Trailer Dim Buttons error:", { status: res.status, data });
+  if (!res.ok) console.error("❌ WhatsApp Container List error:", { status: res.status, data });
   return data;
 }
 
-async function sendWhatsAppTrailerBedButtons(to: string) {
+async function sendWhatsAppTrailerDimList(to: string, bodyText?: string) {
   const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
   const res = await fetch(url, {
     method: "POST",
@@ -708,25 +716,30 @@ async function sendWhatsAppTrailerBedButtons(to: string) {
       to,
       type: "interactive",
       interactive: {
-        type: "button",
-        body: { text: "🚛 Select *Trailer Bed Type*:\n\n1️⃣ Highbed\n2️⃣ Semi Bed\n3️⃣ Low Bed" },
-        footer: { text: "Reply Back to edit Cargo Dimension" },
+        type: "list",
+        body: { text: bodyText || "🚛 Select *Trailer Cargo Dimension*:\n(Standard trailer size: 40 × 8 × 7 ft)" },
         action: {
-          buttons: [
-            { type: "reply", reply: { id: "1", title: "Highbed" } },
-            { type: "reply", reply: { id: "2", title: "Semi Bed" } },
-            { type: "reply", reply: { id: "3", title: "Low Bed" } },
+          button: "Choose Dimension",
+          sections: [
+            {
+              title: "Trailer Dimension",
+              rows: [
+                { id: "1", title: "1️⃣ Normal", description: "Standard Trailer (40 × 8 × 7 ft)" },
+                { id: "2", title: "2️⃣ Over Dimension", description: "ODC / Custom oversize load" },
+                { id: "back", title: "⬅️ Back", description: "Return to Vehicle Type" },
+              ],
+            },
           ],
         },
       },
     }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) console.error("❌ WhatsApp Trailer Bed Buttons error:", { status: res.status, data });
+  if (!res.ok) console.error("❌ WhatsApp Trailer Dim List error:", { status: res.status, data });
   return data;
 }
 
-async function sendWhatsAppTrailerModelButtons(to: string) {
+async function sendWhatsAppTrailerBedList(to: string, bodyText?: string) {
   const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
   const res = await fetch(url, {
     method: "POST",
@@ -739,21 +752,104 @@ async function sendWhatsAppTrailerModelButtons(to: string) {
       to,
       type: "interactive",
       interactive: {
-        type: "button",
-        body: { text: "🚛 Select *Trailer Model & Capacity*:\n\n1️⃣ 3518 (27 MT)\n2️⃣ 4018 (33 MT)\n3️⃣ AMW (40 MT)" },
-        footer: { text: "Reply Back to edit Bed Type" },
+        type: "list",
+        body: { text: bodyText || "🛏️ Select *Trailer Bed Type*:" },
         action: {
-          buttons: [
-            { type: "reply", reply: { id: "1", title: "3518 (27 MT)" } },
-            { type: "reply", reply: { id: "2", title: "4018 (33 MT)" } },
-            { type: "reply", reply: { id: "3", title: "AMW (40 MT)" } },
+          button: "Choose Bed Type",
+          sections: [
+            {
+              title: "Available Bed Types",
+              rows: [
+                { id: "1", title: "1️⃣ Highbed", description: "Flat high bed trailer" },
+                { id: "2", title: "2️⃣ Semi Bed", description: "Semi low bed trailer" },
+                { id: "3", title: "3️⃣ Low Bed", description: "Low bed for heavy cargo" },
+                { id: "back", title: "⬅️ Back", description: "Return to Trailer Dimension" },
+              ],
+            },
           ],
         },
       },
     }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) console.error("❌ WhatsApp Trailer Model Buttons error:", { status: res.status, data });
+  if (!res.ok) console.error("❌ WhatsApp Trailer Bed List error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppTrailerModelList(to: string, bodyText?: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "list",
+        body: { text: bodyText || "🚛 Select *Trailer Model & Capacity*:" },
+        action: {
+          button: "Choose Model",
+          sections: [
+            {
+              title: "Trailer Models",
+              rows: [
+                { id: "1", title: "1️⃣ 3518 (27 MT)", description: "Gross Capacity: 27 MT" },
+                { id: "2", title: "2️⃣ 4018 (33 MT)", description: "Gross Capacity: 33 MT" },
+                { id: "3", title: "3️⃣ AMW (40 MT)", description: "Heavy Haulage: 40 MT" },
+                { id: "back", title: "⬅️ Back", description: "Return to Bed Type" },
+              ],
+            },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Trailer Model List error:", { status: res.status, data });
+  return data;
+}
+
+async function sendWhatsAppTruckSizeList(to: string, bodyText?: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "list",
+        body: { text: bodyText || "🚛 Select *Truck Capacity & Size*:" },
+        action: {
+          button: "Choose Truck Size",
+          sections: [
+            {
+              title: "Truck Capacities",
+              rows: [
+                { id: "1", title: "1️⃣ 12 MT", description: "Size: 22 × 7 × 7 ft" },
+                { id: "2", title: "2️⃣ 18 MT", description: "Size: 22 × 7 × 7 ft" },
+                { id: "3", title: "3️⃣ 25 MT", description: "Size: 24 × 7 × 7 ft" },
+                { id: "4", title: "4️⃣ 30 MT", description: "Size: 28 × 7 × 7 ft" },
+                { id: "5", title: "5️⃣ 35 MT", description: "Size: 30 × 7 × 7 ft" },
+                { id: "6", title: "6️⃣ 40 MT", description: "Size: 32 × 7 × 7 ft" },
+                { id: "back", title: "⬅️ Back", description: "Return to Vehicle Type" },
+              ],
+            },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Truck Size List error:", { status: res.status, data });
   return data;
 }
 
@@ -1077,16 +1173,7 @@ async function processConversation(chat: any, masterRows: any[]) {
     } else if (state === "truck_body_type") {
       delete data.vehicleSubType;
       state = "truck_type";
-      response =
-        "🚛 Select *Truck Capacity & Size*:\n\n" +
-        "1️⃣ 12 MT (Size 22 × 7 × 7 ft)\n" +
-        "2️⃣ 18 MT (Size 22 × 7 × 7 ft)\n" +
-        "3️⃣ 25 MT (Size 24 × 7 × 7 ft)\n" +
-        "4️⃣ 30 MT (Size 28 × 7 × 7 ft)\n" +
-        "5️⃣ 35 MT (Size 30 × 7 × 7 ft)\n" +
-        "6️⃣ 40 MT (Size 32 × 7 × 7 ft)\n\n" +
-        "Reply with *1 - 6*\n\n" +
-        "_(Reply *Back* to edit Vehicle Type)_";
+      response = "🚛 Select *Truck Capacity & Size*:";
     } else if (state === "truck_open_close") {
       delete data.bodyType;
       state = "truck_body_type";
@@ -1135,14 +1222,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       } else if (data.vehicleType === "Container" || data.vehicleType === "32 Ft Container") {
         delete data.vehicleSubType;
         state = "container_type";
-        response =
-          "📦 Select *32 Ft Container Type* (Size: 32 × 8 × 9 ft):\n\n" +
-          "1️⃣ SXL 07 - 10 MT (6 Tyre)\n" +
-          "2️⃣ MXL 15 - 18 MT (10 Tyre)\n" +
-          "3️⃣ MXL 21 - 25 MT (12 Tyre)\n" +
-          "4️⃣ MXL 28 - 30 MT (14 Tyre)\n\n" +
-          "Reply with *1, 2, 3 or 4*\n\n" +
-          "_(Reply *Back* to edit Vehicle Type)_";
+        response = "📦 Select *32 Ft Container Type* (Size: 32 × 8 × 9 ft):";
       } else if (data.vehicleType === "Trailer / ODC") {
         delete data.dimensions;
         state = "trailer_dimensions";
@@ -1535,28 +1615,12 @@ async function processConversation(chat: any, masterRows: any[]) {
       delete data.openClose;
       delete data.remarks;
       state = "truck_type";
-      response =
-        "🚛 Select *Truck Capacity & Size*:\n\n" +
-        "1️⃣ 12 MT (Size 22 × 7 × 7 ft)\n" +
-        "2️⃣ 18 MT (Size 22 × 7 × 7 ft)\n" +
-        "3️⃣ 25 MT (Size 24 × 7 × 7 ft)\n" +
-        "4️⃣ 30 MT (Size 28 × 7 × 7 ft)\n" +
-        "5️⃣ 35 MT (Size 30 × 7 × 7 ft)\n" +
-        "6️⃣ 40 MT (Size 32 × 7 × 7 ft)\n\n" +
-        "Reply with *1 - 6*\n\n" +
-        "_(Reply *Back* to edit Vehicle Type)_";
+      response = "🚛 Select *Truck Capacity & Size*:";
     } else if (message === "3" || /container/i.test(message)) {
       data.vehicleType = "32 Ft Container";
       delete data.vehicleSubType;
       state = "container_type";
-      response =
-        "📦 Select *32 Ft Container Type* (Size: 32 × 8 × 9 ft):\n\n" +
-        "1️⃣ SXL 07 - 10 MT (6 Tyre)\n" +
-        "2️⃣ MXL 15 - 18 MT (10 Tyre)\n" +
-        "3️⃣ MXL 21 - 25 MT (12 Tyre)\n" +
-        "4️⃣ MXL 28 - 30 MT (14 Tyre)\n\n" +
-        "Reply with *1, 2, 3 or 4*\n\n" +
-        "_(Reply *Back* to edit Vehicle Type)_";
+      response = "📦 Select *32 Ft Container Type* (Size: 32 × 8 × 9 ft):";
     } else if (message === "4" || /trailer|odc/i.test(message)) {
       data.vehicleType = "Trailer / ODC";
       delete data.trailerDimType;
@@ -1564,7 +1628,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       delete data.vehicleSubType;
       delete data.dimensions;
       state = "trailer_dim_type";
-      response = "";
+      response = "🚛 Select *Trailer Cargo Dimension*:\n(Standard trailer size: 40 × 8 × 7 ft)";
     } else {
       response = "❌ Please select Vehicle Type from the menu below:";
     }
@@ -1640,15 +1704,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "truck_body_type";
       response = "";
     } else {
-      response =
-        "❌ Invalid choice. Reply with *1 - 6*:\n\n" +
-        "1️⃣ 12 MT (Size 22 × 7 × 7 ft)\n" +
-        "2️⃣ 18 MT (Size 22 × 7 × 7 ft)\n" +
-        "3️⃣ 25 MT (Size 24 × 7 × 7 ft)\n" +
-        "4️⃣ 30 MT (Size 28 × 7 × 7 ft)\n" +
-        "5️⃣ 35 MT (Size 30 × 7 × 7 ft)\n" +
-        "6️⃣ 40 MT (Size 32 × 7 × 7 ft)\n\n" +
-        "_(Reply *Back* to edit Vehicle Type)_";
+      response = "❌ Please select Truck Size from the menu below:";
     }
   } else if (state === "truck_body_type") {
     if (message === "1" || /full/i.test(message)) {
@@ -1716,50 +1772,35 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "material";
       response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Container Type)_";
     } else {
-      response =
-        "❌ Invalid choice. Reply with *1, 2, 3 or 4*:\n\n" +
-        "1️⃣ SXL 07 - 10 MT (6 Tyre)\n" +
-        "2️⃣ MXL 15 - 18 MT (10 Tyre)\n" +
-        "3️⃣ MXL 21 - 25 MT (12 Tyre)\n" +
-        "4️⃣ MXL 28 - 30 MT (14 Tyre)\n\n" +
-        "_(Reply *Back* to edit Vehicle Type)_";
+      response = "❌ Please select Container Type from the menu below:";
     }
   } else if (state === "trailer_dim_type") {
     if (message === "1" || /normal/i.test(message)) {
       data.trailerDimType = "Normal";
       state = "trailer_bed_type";
-      response = "";
+      response = "🛏️ Select *Trailer Bed Type*:";
     } else if (message === "2" || /over|odc/i.test(message)) {
       data.trailerDimType = "Over Dimension (ODC)";
       state = "trailer_bed_type";
-      response = "";
+      response = "🛏️ Select *Trailer Bed Type*:";
     } else {
-      response =
-        "❌ Please select Trailer Cargo Dimension:\n\n" +
-        "1️⃣ Normal\n" +
-        "2️⃣ Over Dimension (ODC)\n\n" +
-        "_(Reply *Back* to edit Vehicle Type)_";
+      response = "❌ Please select Trailer Cargo Dimension from the menu below:";
     }
   } else if (state === "trailer_bed_type") {
     if (message === "1" || /high/i.test(message)) {
       data.trailerBedType = "Highbed";
       state = "trailer_model";
-      response = "";
+      response = "🚛 Select *Trailer Model & Capacity*:";
     } else if (message === "2" || /semi/i.test(message)) {
       data.trailerBedType = "Semi Bed";
       state = "trailer_model";
-      response = "";
+      response = "🚛 Select *Trailer Model & Capacity*:";
     } else if (message === "3" || /low/i.test(message)) {
       data.trailerBedType = "Low Bed";
       state = "trailer_model";
-      response = "";
+      response = "🚛 Select *Trailer Model & Capacity*:";
     } else {
-      response =
-        "❌ Please select Bed Type using buttons below:\n\n" +
-        "1️⃣ Highbed\n" +
-        "2️⃣ Semi Bed\n" +
-        "3️⃣ Low Bed\n\n" +
-        "_(Reply *Back* to edit Trailer Dimension)_";
+      response = "❌ Please select Trailer Bed Type from the menu below:";
     }
   } else if (state === "trailer_model") {
     if (message === "1" || /3518|27\s*mt/i.test(message)) {
@@ -1790,12 +1831,7 @@ async function processConversation(chat: any, masterRows: any[]) {
         "💡 _Standard trailer size is 40 × 8 × 7 ft. You can type *Standard* or enter custom dimensions._\n\n" +
         "_(Reply *Back* to edit Trailer Model)_";
     } else {
-      response =
-        "❌ Please select Trailer Model using buttons below:\n\n" +
-        "1️⃣ 3518 (27 MT)\n" +
-        "2️⃣ 4018 (33 MT)\n" +
-        "3️⃣ AMW (40 MT)\n\n" +
-        "_(Reply *Back* to edit Bed Type)_";
+      response = "❌ Please select Trailer Model from the menu below:";
     }
   } else if (state === "trailer_dimensions") {
     if (/standard/i.test(message)) {
@@ -2305,6 +2341,11 @@ serve(async (req: Request) => {
                 await sendWhatsAppText(output.phone, output.response);
               }
               await sendWhatsAppFcl40VehicleButtons(output.phone, parsedData.containerType || "FCL 40");
+            } else if (output.state === "truck_type") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppTruckSizeList(output.phone, output.response);
             } else if (output.state === "truck_body_type") {
               if (output.response && output.response.startsWith("❌")) {
                 await sendWhatsAppText(output.phone, output.response);
@@ -2320,21 +2361,26 @@ serve(async (req: Request) => {
                 await sendWhatsAppText(output.phone, output.response);
               }
               await sendWhatsAppTruckRemarksButtons(output.phone);
+            } else if (output.state === "container_type") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppContainerList(output.phone, output.response);
             } else if (output.state === "trailer_dim_type") {
               if (output.response && output.response.startsWith("❌")) {
                 await sendWhatsAppText(output.phone, output.response);
               }
-              await sendWhatsAppTrailerDimButtons(output.phone);
+              await sendWhatsAppTrailerDimList(output.phone, output.response);
             } else if (output.state === "trailer_bed_type") {
               if (output.response && output.response.startsWith("❌")) {
                 await sendWhatsAppText(output.phone, output.response);
               }
-              await sendWhatsAppTrailerBedButtons(output.phone);
+              await sendWhatsAppTrailerBedList(output.phone, output.response);
             } else if (output.state === "trailer_model") {
               if (output.response && output.response.startsWith("❌")) {
                 await sendWhatsAppText(output.phone, output.response);
               }
-              await sendWhatsAppTrailerModelButtons(output.phone);
+              await sendWhatsAppTrailerModelList(output.phone, output.response);
             } else if (output.state === "loading_date" && WHATSAPP_FLOW_ID) {
               try {
                 await sendWhatsAppFlowDatePicker(output.phone, WHATSAPP_FLOW_ID);
