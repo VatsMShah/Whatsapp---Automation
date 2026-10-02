@@ -254,11 +254,12 @@ async function sendWhatsAppTimeSlotButtons(to: string) {
       interactive: {
         type: "button",
         body: { text: "⏰ Select your preferred loading time slot:" },
+        footer: { text: "Reply Back to edit Loading Date" },
         action: {
           buttons: [
-            { type: "reply", reply: { id: "1", title: "🌅 Slot 1 (6AM-4PM)" } },
-            { type: "reply", reply: { id: "2", title: "🌙 Slot 2 (4PM-6AM)" } },
-            { type: "reply", reply: { id: "back", title: "⬅️ Back" } },
+            { type: "reply", reply: { id: "1", title: "🌅 Slot 1 (7AM-2PM)" } },
+            { type: "reply", reply: { id: "2", title: "🌙 Slot 2 (2PM-8PM)" } },
+            { type: "reply", reply: { id: "3", title: "⏰ Anytime (All Day)" } },
           ],
         },
       },
@@ -549,14 +550,7 @@ async function processConversation(chat: any, masterRows: any[]) {
     } else if (state === "company") {
       delete data.loadingTime;
       state = "loading_time";
-      response =
-        "⏰ Select or Enter *Loading Time*:\n\n" +
-        "1️⃣ Slot One (06:00 AM - 04:00 PM)\n" +
-        "2️⃣ Slot Two (04:00 PM - 06:00 AM)\n" +
-
-
-
-        "Reply with *1* or *2* (or type a specific time, e.g., 10:30 AM, 4 PM)\n\n_(Reply *Back* to edit Loading Date)_";
+      response = "";
     } else if (state === "contact_name") {
       delete data.company;
       state = "company";
@@ -813,14 +807,7 @@ async function processConversation(chat: any, masterRows: any[]) {
     if (dateCheck.valid) {
       data.loadingDate = dateCheck.formatted || message.trim();
       state = "loading_time";
-      response =
-        "⏰ Select or Enter *Loading Time*:\n\n" +
-        "1️⃣ Morning (06:00 AM - 12:00 PM)\n" +
-        "2️⃣ Afternoon (12:00 PM - 04:00 PM)\n" +
-        "3️⃣ Evening (04:00 PM - 09:00 PM)\n" +
-        "4️⃣ Night (09:00 PM - 06:00 AM)\n" +
-        "5️⃣ Any Time (Full Day Flexible)\n\n" +
-        "Reply with *1 - 5* or type a specific time (e.g., 10:30 AM, 4 PM)\n\n_(Reply *Back* to edit Loading Date)_";
+      response = "";
     } else if (dateCheck.reason === "past") {
       response = "❌ Loading date cannot be in the past.\n\nPlease enter today's date or a future date in DD/MM/YYYY format:\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit Material Description)_";
     } else {
@@ -828,14 +815,22 @@ async function processConversation(chat: any, masterRows: any[]) {
     }
   } else if (state === "loading_time") {
     const timeMap: Record<string, string> = {
-      "1": "Morning (06:00 AM - 12:00 PM)",
-      "2": "Afternoon (12:00 PM - 04:00 PM)",
-      "3": "Evening (04:00 PM - 09:00 PM)",
-      "4": "Night (09:00 PM - 06:00 AM)",
-      "5": "Any Time (Flexible)",
+      "1": "Slot 1 (07:00 AM - 02:00 PM)",
+      "2": "Slot 2 (02:00 PM - 08:00 PM)",
+      "3": "Anytime (Whole Day)",
     };
-    if (timeMap[message]) {
-      data.loadingTime = timeMap[message];
+    let selectedTime = timeMap[message];
+    if (!selectedTime) {
+      if (/^(slot\s*1|slot\s*one|morning|7\s*am)/i.test(message)) {
+        selectedTime = "Slot 1 (07:00 AM - 02:00 PM)";
+      } else if (/^(slot\s*2|slot\s*two|afternoon|evening|night|2\s*pm)/i.test(message)) {
+        selectedTime = "Slot 2 (02:00 PM - 08:00 PM)";
+      } else if (/^(slot\s*3|any\s*time|anytime|whole\s*day|all\s*day|full\s*day|flexible)/i.test(message)) {
+        selectedTime = "Anytime (Whole Day)";
+      }
+    }
+    if (selectedTime) {
+      data.loadingTime = selectedTime;
       state = "company";
       response = "🏢 Enter your *Company Name*:\n(or type *NA* if individual)\n\n_(Reply *Back* to edit Loading Time)_";
     } else if (message.trim().length >= 2) {
@@ -843,7 +838,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "company";
       response = "🏢 Enter your *Company Name*:\n(or type *NA* if individual)\n\n_(Reply *Back* to edit Loading Time)_";
     } else {
-      response = "❌ Invalid time.\n\nPlease reply with *1 - 5* or type a valid time (e.g., 10:30 AM, Morning, 4 PM):\n\n_(Reply *Back* to edit Loading Date)_";
+      response = "❌ Invalid time.\n\nPlease select a slot below, or reply with *1, 2, or 3*, or type a specific time (e.g., 10:30 AM):\n\n_(Reply *Back* to edit Loading Date)_";
     }
   } else if (state === "company") {
     data.company = message;
@@ -1142,9 +1137,8 @@ serve(async (req: Request) => {
                 }
               }
             } else if (output.state === "loading_time") {
-              if (output.response) {
-                const cleanText = output.response.replace(/\n*_?\(Reply \*Back\* to [^)]+\)_?/g, "").trim();
-                if (cleanText) await sendWhatsAppText(output.phone, cleanText);
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
               }
               await sendWhatsAppTimeSlotButtons(output.phone);
             } else if (output.state === "main_menu") {
