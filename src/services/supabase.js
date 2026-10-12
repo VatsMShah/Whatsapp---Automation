@@ -55,72 +55,101 @@ function mapMasterToDB(jsRow) {
 
 function mapBookToJS(dbRow) {
   if (!dbRow) return {};
+  const flow = dbRow.flow_data || {};
   return {
     user_id: dbRow.user_id,
-    state: dbRow.state,
-    updated_at: dbRow.updated_at,
-    loadingPin: dbRow.loading_pin,
-    unloadingPin: dbRow.unloading_pin,
-    cargoType: dbRow.cargo_type,
-    vehicleType: dbRow.vehicle_type,
-    vehicleSubType: dbRow.vehicle_sub_type,
-    material: dbRow.material,
-    loadingDate: dbRow.loading_date,
-    company: dbRow.company,
-    contactName: dbRow.contact_name,
     phone: dbRow.phone,
-    email: dbRow.email,
-    website: dbRow.website,
+    state: dbRow.state,
+    cargoType: dbRow.cargo_type,
+    origin: dbRow.origin,
+    destination: dbRow.destination,
+    vehicleOrContainer: dbRow.vehicle_or_container,
+    materialOrLine: dbRow.material_or_line,
     weight: dbRow.weight,
-    fclType: dbRow.fcl_type,
-    containerType: dbRow.container_type,
-    dimensions: dbRow.cargo_dimensions,
-    shippingLine: dbRow.shipping_line,
-    loadingYard: dbRow.loading_yard,
-    unloadingAddress: dbRow.unloading_address,
-    emptyYard: dbRow.empty_yard,
-    stuffingAddress: dbRow.stuffing_address,
-    portCfs: dbRow.port_cfs,
-    bodyType: dbRow.body_type,
-    openClose: dbRow.open_close,
-    trailerBedType: dbRow.trailer_bed_type,
-    trailerDimType: dbRow.trailer_dim_type,
+    loadingDate: dbRow.loading_date,
+    timeSlot: dbRow.time_slot,
+    company: dbRow.company_name,
+    contactName: dbRow.contact_name,
+    email: dbRow.email,
     remarks: dbRow.remarks,
+    updated_at: dbRow.updated_at,
+    loadingPin: flow.loading_pin || dbRow.origin,
+    unloadingPin: flow.unloading_pin || dbRow.destination,
+    vehicleType: flow.vehicle_type || dbRow.vehicle_or_container,
+    vehicleSubType: flow.vehicle_sub_type,
+    material: flow.material || dbRow.material_or_line,
+    fclType: flow.fcl_type,
+    containerType: flow.container_type,
+    shippingLine: flow.shipping_line || dbRow.material_or_line,
+    loadingYard: flow.loading_yard || dbRow.origin,
+    unloadingAddress: flow.unloading_address || dbRow.destination,
+    emptyYard: flow.empty_yard,
+    stuffingAddress: flow.stuffing_address || dbRow.origin,
+    portCfs: flow.port_cfs || dbRow.destination,
+    bodyType: flow.body_type,
+    openClose: flow.open_close,
+    trailerBedType: flow.trailer_bed_type,
+    trailerDimType: flow.trailer_dim_type,
   };
 }
 
 function mapBookToDB(jsRow) {
+  const origin = jsRow.loadingYard || jsRow.stuffingAddress || jsRow.loadingPin || '';
+  const destination = jsRow.unloadingAddress || jsRow.portCfs || jsRow.unloadingPin || '';
+
+  let vehicleOrContainer = '';
+  if (jsRow.fclType) {
+    vehicleOrContainer = `${jsRow.fclType}${jsRow.containerType ? ` (${jsRow.containerType})` : ''}`;
+  } else if (jsRow.vehicleType) {
+    vehicleOrContainer = jsRow.vehicleType;
+    if (jsRow.vehicleSubType) vehicleOrContainer += ` – ${jsRow.vehicleSubType}`;
+    if (jsRow.bodyType) vehicleOrContainer += ` (${jsRow.bodyType})`;
+  }
+
+  const materialOrLine = jsRow.shippingLine || jsRow.material || '';
+
+  let remarks = jsRow.remarks || '';
+  if (jsRow.emptyYard && !remarks.includes(jsRow.emptyYard)) {
+    remarks = remarks ? `Empty Yard: ${jsRow.emptyYard} | ${remarks}` : `Empty Yard: ${jsRow.emptyYard}`;
+  }
+
   return {
     user_id: jsRow.user_id,
-    state: jsRow.state,
-    updated_at: jsRow.updated_at || new Date().toISOString(),
-    loading_pin: jsRow.loadingPin || '',
-    unloading_pin: jsRow.unloadingPin || '',
-    cargo_type: jsRow.cargoType || '',
-    vehicle_type: jsRow.vehicleType || '',
-    vehicle_sub_type: jsRow.vehicleSubType || '',
-    material: jsRow.material || '',
-    loading_date: jsRow.loadingDate || '',
-    company: jsRow.company || '',
-    contact_name: jsRow.contactName || '',
     phone: jsRow.phone || '',
-    email: jsRow.email || '',
-    website: jsRow.website || '',
+    state: jsRow.state || '',
+    cargo_type: jsRow.cargoType || '',
+    origin: origin,
+    destination: destination,
+    vehicle_or_container: vehicleOrContainer,
+    material_or_line: materialOrLine,
     weight: jsRow.weight || '',
-    fcl_type: jsRow.fclType || '',
-    container_type: jsRow.containerType || '',
-    cargo_dimensions: jsRow.dimensions || '',
-    shipping_line: jsRow.shippingLine || '',
-    loading_yard: jsRow.loadingYard || '',
-    unloading_address: jsRow.unloadingAddress || '',
-    empty_yard: jsRow.emptyYard || '',
-    stuffing_address: jsRow.stuffingAddress || '',
-    port_cfs: jsRow.portCfs || '',
-    body_type: jsRow.bodyType || '',
-    open_close: jsRow.openClose || '',
-    trailer_bed_type: jsRow.trailerBedType || '',
-    trailer_dim_type: jsRow.trailerDimType || '',
-    remarks: jsRow.remarks || '',
+    loading_date: jsRow.loadingDate || '',
+    time_slot: jsRow.loadingTime || '',
+    company_name: jsRow.company || '',
+    contact_name: jsRow.contactName || '',
+    email: jsRow.email || '',
+    remarks: remarks,
+    flow_data: {
+      loading_pin: jsRow.loadingPin || '',
+      unloading_pin: jsRow.unloadingPin || '',
+      vehicle_type: jsRow.vehicleType || '',
+      vehicle_sub_type: jsRow.vehicleSubType || '',
+      body_type: jsRow.bodyType || '',
+      open_close: jsRow.openClose || '',
+      trailer_bed_type: jsRow.trailerBedType || '',
+      trailer_dim_type: jsRow.trailerDimType || '',
+      fcl_type: jsRow.fclType || '',
+      container_type: jsRow.containerType || '',
+      shipping_line: jsRow.shippingLine || '',
+      loading_yard: jsRow.loadingYard || '',
+      unloading_address: jsRow.unloadingAddress || '',
+      empty_yard: jsRow.emptyYard || '',
+      stuffing_address: jsRow.stuffingAddress || '',
+      port_cfs: jsRow.portCfs || '',
+      cargo_dimensions: jsRow.dimensions || '',
+      website: jsRow.website || '',
+    },
+    updated_at: jsRow.updated_at || new Date().toISOString(),
   };
 }
 

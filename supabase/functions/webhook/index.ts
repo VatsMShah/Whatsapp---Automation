@@ -2424,36 +2424,61 @@ serve(async (req: Request) => {
 
             const parsedData = JSON.parse(output.data || "{}");
             if (output.flowType === "book") {
+              const origin = parsedData.loadingYard || parsedData.stuffingAddress || parsedData.loadingPin || "";
+              const destination = parsedData.unloadingAddress || parsedData.portCfs || parsedData.unloadingPin || "";
+
+              let vehicleOrContainer = "";
+              if (parsedData.fclType) {
+                vehicleOrContainer = `${parsedData.fclType}${parsedData.containerType ? ` (${parsedData.containerType})` : ""}`;
+              } else if (parsedData.vehicleType) {
+                vehicleOrContainer = parsedData.vehicleType;
+                if (parsedData.vehicleSubType) vehicleOrContainer += ` – ${parsedData.vehicleSubType}`;
+                if (parsedData.bodyType) vehicleOrContainer += ` (${parsedData.bodyType})`;
+              }
+
+              const materialOrLine = parsedData.shippingLine || parsedData.material || "";
+
+              let remarks = parsedData.remarks || "";
+              if (parsedData.emptyYard && !remarks.includes(parsedData.emptyYard)) {
+                remarks = remarks ? `Empty Yard: ${parsedData.emptyYard} | ${remarks}` : `Empty Yard: ${parsedData.emptyYard}`;
+              }
+
               await supabase.from("book_vehicle").upsert({
                 user_id: output.user_id,
-                state: output.state,
-                updated_at: output.updated_at,
-                loading_pin: parsedData.loadingPin || "",
-                unloading_pin: parsedData.unloadingPin || "",
-                cargo_type: parsedData.cargoType || "",
-                vehicle_type: parsedData.fclType ? `${parsedData.fclType} (${parsedData.containerType || ""})` : (parsedData.vehicleType || ""),
-                vehicle_sub_type: parsedData.vehicleSubType || "",
-                material: parsedData.material || "",
-                loading_date: (parsedData.loadingDate || "") + (parsedData.loadingTime ? ` (${parsedData.loadingTime})` : ""),
-                company: parsedData.company || "",
-                contact_name: parsedData.contactName || "",
                 phone: parsedData.phone || phone,
-                email: parsedData.email || "",
+                state: output.state,
+                cargo_type: parsedData.cargoType || "",
+                origin: origin,
+                destination: destination,
+                vehicle_or_container: vehicleOrContainer,
+                material_or_line: materialOrLine,
                 weight: parsedData.weight || "",
-                fcl_type: parsedData.fclType || "",
-                container_type: parsedData.containerType || "",
-                cargo_dimensions: parsedData.dimensions || "",
-                shipping_line: parsedData.shippingLine || "",
-                loading_yard: parsedData.loadingYard || "",
-                unloading_address: parsedData.unloadingAddress || "",
-                empty_yard: parsedData.emptyYard || "",
-                stuffing_address: parsedData.stuffingAddress || "",
-                port_cfs: parsedData.portCfs || "",
-                body_type: parsedData.bodyType || "",
-                open_close: parsedData.openClose || "",
-                trailer_bed_type: parsedData.trailerBedType || "",
-                trailer_dim_type: parsedData.trailerDimType || "",
-                remarks: parsedData.remarks || "",
+                loading_date: parsedData.loadingDate || "",
+                time_slot: parsedData.loadingTime || "",
+                company_name: parsedData.company || "",
+                contact_name: parsedData.contactName || "",
+                email: parsedData.email || "",
+                remarks: remarks,
+                flow_data: {
+                  loading_pin: parsedData.loadingPin || "",
+                  unloading_pin: parsedData.unloadingPin || "",
+                  vehicle_type: parsedData.vehicleType || "",
+                  vehicle_sub_type: parsedData.vehicleSubType || "",
+                  body_type: parsedData.bodyType || "",
+                  open_close: parsedData.openClose || "",
+                  trailer_bed_type: parsedData.trailerBedType || "",
+                  trailer_dim_type: parsedData.trailerDimType || "",
+                  fcl_type: parsedData.fclType || "",
+                  container_type: parsedData.containerType || "",
+                  shipping_line: parsedData.shippingLine || "",
+                  loading_yard: parsedData.loadingYard || "",
+                  unloading_address: parsedData.unloadingAddress || "",
+                  empty_yard: parsedData.emptyYard || "",
+                  stuffing_address: parsedData.stuffingAddress || "",
+                  port_cfs: parsedData.portCfs || "",
+                  cargo_dimensions: parsedData.dimensions || "",
+                },
+                updated_at: output.updated_at,
               });
             } else if (output.flowType === "provider") {
               await supabase.from("provide_vehicle").upsert({
