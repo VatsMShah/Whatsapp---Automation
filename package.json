@@ -11,9 +11,9 @@
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "tunnel": "npx ngrok http 3000",
-    "supabase:deploy": "supabase functions deploy --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api",
-    "supabase:deploy:webhook": "supabase functions deploy webhook --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api",
-    "supabase:deploy:traket": "supabase functions deploy TraketFUnction --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api"
+    "supabase:deploy": "npx supabase functions deploy --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api",
+    "supabase:deploy:webhook": "npx supabase functions deploy webhook --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api",
+    "supabase:deploy:traket": "npx supabase functions deploy TraketFUnction --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.0",
