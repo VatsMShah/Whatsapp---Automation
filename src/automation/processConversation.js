@@ -165,15 +165,14 @@ function processConversation(waMessagePayload, masterRows) {
       /\b(support|help)\b/i.test(lowerMessage);
 
     if (isBookChoice) {
-      state = 'route_details';
+      state = 'cargo_type';
       data.flowType = 'book';
       response =
-        '📍 Enter Route Details\n\n' +
-        'Loading Pincode\n' +
-        'Unloading Pincode\n\n' +
-        'Example:\n' +
-        '400701\n' +
-        '110020';
+        '📦 Select Cargo Type:\n\n' +
+        '1️⃣ Domestic\n' +
+        '2️⃣ Import\n' +
+        '3️⃣ Export\n\n' +
+        'Reply with *1 / 2 / 3*';
     } else if (isProvideChoice) {
       data.flowType = 'provider';
       state = 'vp1_basic_details';
@@ -344,14 +343,21 @@ function processConversation(waMessagePayload, masterRows) {
       data.loadingPin = loadingPin;
       data.unloadingPin = unloadingPin;
 
-      state = 'cargo_type';
+      state = 'contact_details';
 
       response =
-        '📦 Select Cargo Type:\n\n' +
-        '1️⃣ Domestic\n' +
-        '2️⃣ Import\n' +
-        '3️⃣ Export\n\n' +
-        'Reply with *1 / 2 / 3*';
+        '👤 Enter Contact Details\n\n' +
+        'Company Name\n' +
+        'Contact Person\n' +
+        'Phone Number\n' +
+        'Email\n' +
+        'Website (or NA)\n\n' +
+        'Example:\n' +
+        'ABC Logistics\n' +
+        'Rahul Sharma\n' +
+        '9876543210\n' +
+        'rahul@gmail.com\n' +
+        'www.abc.com';
     }
   } else if (state === 'cargo_type') {
     if (['1', '2', '3'].includes(message)) {
@@ -509,21 +515,31 @@ function processConversation(waMessagePayload, masterRows) {
 
       data.loadingDate = lines[3] || '';
 
-      state = 'contact_details';
-
-      response =
-        '👤 Enter Contact Details\n\n' +
-        'Company Name\n' +
-        'Contact Person\n' +
-        'Phone Number\n' +
-        'Email\n' +
-        'Website (or NA)\n\n' +
-        'Example:\n' +
-        'ABC Logistics\n' +
-        'Rahul Sharma\n' +
-        '9876543210\n' +
-        'rahul@gmail.com\n' +
-        'www.abc.com';
+      if (data.cargoType === 'Domestic') {
+        state = 'route_details';
+        response =
+          '📍 Enter Route Details\n\n' +
+          'Loading Pincode\n' +
+          'Unloading Pincode\n\n' +
+          'Example:\n' +
+          '400701\n' +
+          '110020';
+      } else {
+        state = 'contact_details';
+        response =
+          '👤 Enter Contact Details\n\n' +
+          'Company Name\n' +
+          'Contact Person\n' +
+          'Phone Number\n' +
+          'Email\n' +
+          'Website (or NA)\n\n' +
+          'Example:\n' +
+          'ABC Logistics\n' +
+          'Rahul Sharma\n' +
+          '9876543210\n' +
+          'rahul@gmail.com\n' +
+          'www.abc.com';
+      }
     }
   } else if (state === 'contact_details') {
     const text = message;

@@ -239,7 +239,9 @@ async function sendWhatsAppFlowDatePicker(to: string, flowId: string, minDate?: 
 }
 
 
-async function sendWhatsAppTimeSlotButtons(to: string) {
+async function sendWhatsAppTimeSlotButtons(to: string, bodyText?: string, backHint?: string) {
+  const text = (bodyText || "⏰ Select your preferred loading time slot:").trim();
+  const footerText = backHint || "Reply Back to edit previous step";
   const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
   const res = await fetch(url, {
     method: "POST",
@@ -253,8 +255,8 @@ async function sendWhatsAppTimeSlotButtons(to: string) {
       type: "interactive",
       interactive: {
         type: "button",
-        body: { text: "⏰ Select your preferred loading time slot:" },
-        footer: { text: "Reply Back to edit Loading Date" },
+        body: { text },
+        footer: { text: footerText },
         action: {
           buttons: [
             { type: "reply", reply: { id: "1", title: "🌅 Slot 1 (7AM-2PM)" } },
@@ -273,6 +275,7 @@ async function sendWhatsAppTimeSlotButtons(to: string) {
   }
   return data;
 }
+
 
 async function sendWhatsAppMainMenuButtons(to: string) {
   const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
@@ -1034,34 +1037,27 @@ async function processConversation(chat: any, masterRows: any[]) {
   const isBackCommand = ["back", "b", "undo", "prev", "previous", "0", "cta_back"].includes(lowerMessage);
 
   if (isBackCommand) {
-    if (state === "loading_pin" || state === "provider_vehicle_type") {
+    if (state === "cargo_type" || state === "provider_vehicle_type") {
       state = "main_menu";
       flowType = "";
       response = "";
     }
     // Customer Booking Flow - Step Back
-    else if (state === "unloading_pin") {
+    else if (state === "loading_pin") {
+      delete data.loadingDate;
+      state = "loading_date";
+      response = "📅 Enter *Loading Date* (DD/MM/YYYY):\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit Material Description)_";
+    } else if (state === "unloading_pin") {
       delete data.loadingPin;
       delete data.loadingLocation;
       delete data.loadingDistrict;
       delete data.loadingState;
       state = "loading_pin";
-      response = "📍 Enter *Loading Pincode* (6 digits):\n(e.g., 400001)\n\n_(Reply *Back* to return to Main Menu)_";
-    } else if (state === "cargo_type") {
-      delete data.unloadingPin;
-      delete data.unloadingLocation;
-      delete data.unloadingDistrict;
-      delete data.unloadingState;
-      state = "unloading_pin";
-      response = "📍 Enter *Unloading Pincode* (6 digits):\n(e.g., 560001)\n\n_(Reply *Back* to edit Loading Pincode)_";
+      response = "📍 Enter *Loading Pincode* (6 digits):\n(e.g., 400001)\n\n_(Reply *Back* to edit Loading Date)_";
     } else if (state === "fcl_type") {
       delete data.cargoType;
       state = "cargo_type";
-      response =
-        (data.unloadingLocation
-          ? `✅ *Unloading Location:* ${data.unloadingLocation}\n🛣️ *Route:* ${data.loadingDistrict || data.loadingPin} ➔ ${data.unloadingDistrict || data.unloadingPin}\n\n`
-          : "") +
-        `📦 Select *Cargo Type*:`;
+      response = "📦 Select *Cargo Type*:\n\n_(Reply *Back* to return to Main Menu)_";
     } else if (state === "fcl_20_container" || state === "fcl_40_container") {
       delete data.fclType;
       delete data.vehicleType;
@@ -1154,10 +1150,7 @@ async function processConversation(chat: any, masterRows: any[]) {
     } else if (state === "vehicle_type") {
       delete data.cargoType;
       state = "cargo_type";
-      response =
-        `✅ *Unloading Location:* ${data.unloadingLocation || data.unloadingPin}\n` +
-        `🛣️ *Route:* ${data.loadingDistrict || data.loadingPin} ➔ ${data.unloadingDistrict || data.unloadingPin}\n\n` +
-        `📦 Select *Cargo Type*:`;
+      response = "📦 Select *Cargo Type*:\n\n_(Reply *Back* to return to Main Menu)_";
     } else if (state === "tempo_type") {
       delete data.vehicleType;
       state = "vehicle_type";
@@ -1249,9 +1242,20 @@ async function processConversation(chat: any, masterRows: any[]) {
         response = "📝 Enter *Material / Goods Description*:\n(e.g., Industrial machinery, Textiles, FMCG)\n\n_(Reply *Back* to edit Vehicle Size)_";
       }
     } else if (state === "loading_time") {
-      delete data.loadingDate;
-      state = "loading_date";
-      response = "📅 Enter *Loading Date* (DD/MM/YYYY):\n(e.g., 25/09/2026)\n\n_(Reply *Back* to previous step)_";
+      delete data.loadingTime;
+      if (data.cargoType === "Domestic") {
+        delete data.unloadingPin;
+        delete data.unloadingLocation;
+        delete data.unloadingDistrict;
+        delete data.unloadingState;
+        state = "unloading_pin";
+        response = "📍 Enter *Unloading Pincode* (6 digits):\n(e.g., 560001)\n\n_(Reply *Back* to edit Loading Pincode)_";
+      } else {
+        delete data.loadingDate;
+        state = "loading_date";
+        const backHint = data.cargoType === "Import" ? "Empty Yard" : "Unloading Port/CFS";
+        response = `📅 Enter *Loading Date* (DD/MM/YYYY):\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit ${backHint})_`;
+      }
     } else if (state === "company") {
       delete data.loadingTime;
       state = "loading_time";
@@ -1364,9 +1368,9 @@ async function processConversation(chat: any, masterRows: any[]) {
       /\b(support|help)\b/i.test(lowerMessage);
 
     if (isBookChoice) {
-      state = "loading_pin";
+      state = "cargo_type";
       flowType = "book";
-      response = "📍 Enter *Loading Pincode* (6 digits):\n(e.g., 400001)\n\n_(Reply *Back* to return to Main Menu)_";
+      response = "📦 Select *Cargo Type*:\n\n_(Reply *Back* to return to Main Menu)_";
     } else if (isProvideChoice) {
       state = "provider_vehicle_type";
       flowType = "provider";
@@ -1395,7 +1399,23 @@ async function processConversation(chat: any, masterRows: any[]) {
   // =====================================================================
   // 2. BOOK VEHICLE FLOW (WITH POSTAL CODE VALIDATION)
   // =====================================================================
-  else if (state === "loading_pin") {
+  else if (state === "cargo_type") {
+    if (message === "1" || /domestic/i.test(message)) {
+      data.cargoType = "Domestic";
+      state = "vehicle_type";
+      response = "🚛 Select *Vehicle Type*:";
+    } else if (message === "2" || /import/i.test(message)) {
+      data.cargoType = "Import";
+      state = "fcl_type";
+      response = "";
+    } else if (message === "3" || /export/i.test(message)) {
+      data.cargoType = "Export";
+      state = "fcl_type";
+      response = "";
+    } else {
+      response = "❌ Please select Cargo Type using buttons below:\n\n📦 Select *Cargo Type*:\n\n_(Reply *Back* to return to Main Menu)_";
+    }
+  } else if (state === "loading_pin") {
     if (/^\d{6}$/.test(message)) {
       const pinResult = await lookupPostalPinCode(message);
       if (pinResult.valid) {
@@ -1412,10 +1432,10 @@ async function processConversation(chat: any, masterRows: any[]) {
         response =
           `❌ *Pincode Not Found:* No postal records found for *${message}* in India.\n\n` +
           `Please enter a valid *6-digit Loading Pincode*:\n(e.g., 400001)\n\n` +
-          `_(Reply *Back* to return to Main Menu)_`;
+          `_(Reply *Back* to edit Loading Date)_`;
       }
     } else {
-      response = "❌ Invalid pincode format. Please enter a valid *6-digit* Loading Pincode:\n(e.g., 400001)\n\n_(Reply *Back* to return to Main Menu)_";
+      response = "❌ Invalid pincode format. Please enter a valid *6-digit* Loading Pincode:\n(e.g., 400001)\n\n_(Reply *Back* to edit Loading Date)_";
     }
   } else if (state === "unloading_pin") {
     if (/^\d{6}$/.test(message)) {
@@ -1425,11 +1445,11 @@ async function processConversation(chat: any, masterRows: any[]) {
         data.unloadingLocation = pinResult.location;
         data.unloadingDistrict = pinResult.district;
         data.unloadingState = pinResult.state;
-        state = "cargo_type";
+        state = "loading_time";
         response =
           `✅ *Unloading Location:* ${pinResult.location}\n` +
           `🛣️ *Route:* ${data.loadingDistrict || data.loadingPin} ➔ ${pinResult.district || message}\n\n` +
-          `📦 Select *Cargo Type*:`;
+          `⏰ Select *Loading Time Slot*:`;
       } else {
         response =
           `❌ *Pincode Not Found:* No postal records found for *${message}* in India.\n\n` +
@@ -1438,26 +1458,6 @@ async function processConversation(chat: any, masterRows: any[]) {
       }
     } else {
       response = "❌ Invalid pincode format. Please enter a valid *6-digit* Unloading Pincode:\n(e.g., 560001)\n\n_(Reply *Back* to edit Loading Pincode)_";
-    }
-  } else if (state === "cargo_type") {
-    if (message === "1" || /domestic/i.test(message)) {
-      data.cargoType = "Domestic";
-      state = "vehicle_type";
-      response = "🚛 Select *Vehicle Type*:";
-    } else if (message === "2" || /import/i.test(message)) {
-      data.cargoType = "Import";
-      state = "fcl_type";
-      response = "";
-    } else if (message === "3" || /export/i.test(message)) {
-      data.cargoType = "Export";
-      state = "fcl_type";
-      response = "";
-    } else {
-      response =
-        (data.unloadingLocation
-          ? `✅ *Unloading Location:* ${data.unloadingLocation}\n🛣️ *Route:* ${data.loadingDistrict || data.loadingPin} ➔ ${data.unloadingDistrict || data.unloadingPin}\n\n`
-          : "") +
-        "❌ Please select Cargo Type using buttons below:\n\n📦 Select *Cargo Type*:";
     }
   } else if (state === "fcl_type") {
     if (message === "1" || /20|fcl\s*20/i.test(message)) {
@@ -1950,8 +1950,13 @@ async function processConversation(chat: any, masterRows: any[]) {
     const dateBackHint = data.cargoType === "Import" ? "Empty Yard" : (data.cargoType === "Export" ? "Unloading Port/CFS" : "Material Description");
     if (dateCheck.valid) {
       data.loadingDate = dateCheck.formatted || message.trim();
-      state = "loading_time";
-      response = "";
+      if (data.cargoType === "Domestic") {
+        state = "loading_pin";
+        response = "📍 Enter *Loading Pincode* (6 digits):\n(e.g., 400001)\n\n_(Reply *Back* to edit Loading Date)_";
+      } else {
+        state = "loading_time";
+        response = "";
+      }
     } else if (dateCheck.reason === "past") {
       response = `❌ Loading date cannot be in the past.\n\nPlease enter today's date or a future date in DD/MM/YYYY format:\n(e.g., 25/09/2026)\n\n_(Reply *Back* to edit ${dateBackHint})_`;
     } else {
@@ -1973,6 +1978,7 @@ async function processConversation(chat: any, masterRows: any[]) {
         selectedTime = "Anytime (Whole Day)";
       }
     }
+    const backHint = data.cargoType === "Domestic" ? "Unloading Pincode" : "Loading Date";
     if (selectedTime) {
       data.loadingTime = selectedTime;
       state = "company";
@@ -1982,7 +1988,7 @@ async function processConversation(chat: any, masterRows: any[]) {
       state = "company";
       response = "🏢 Enter your *Company Name*:\n(or type *NA* if individual)\n\n_(Reply *Back* to edit Loading Time)_";
     } else {
-      response = "❌ Invalid time.\n\nPlease select a slot below, or reply with *1, 2, or 3*, or type a specific time (e.g., 10:30 AM):\n\n_(Reply *Back* to edit Loading Date)_";
+      response = `❌ Invalid time.\n\nPlease select a slot below, or reply with *1, 2, or 3*, or type a specific time (e.g., 10:30 AM):\n\n_(Reply *Back* to edit ${backHint})_`;
     }
   } else if (state === "company") {
     data.company = message;
@@ -2017,9 +2023,20 @@ async function processConversation(chat: any, masterRows: any[]) {
           `• Unloading in JNPT: ${data.portCfs || "N/A"}\n\n`;
       }
 
+      let routeLine = "";
+      if (data.cargoType === "Domestic") {
+        routeLine = `📍 *Route:* ${data.loadingPin} (${data.loadingLocation || "Origin"}) ➔ ${data.unloadingPin} (${data.unloadingLocation || "Destination"})\n`;
+      } else if (data.cargoType === "Import") {
+        routeLine = `📍 *Route:* ${data.loadingYard || "JNPT Yard"} ➔ ${data.unloadingAddress || "Destination"}\n`;
+      } else if (data.cargoType === "Export") {
+        routeLine = `📍 *Route:* ${data.stuffingAddress || "Origin"} ➔ ${data.portCfs || "JNPT (Port / CFS)"}\n`;
+      } else if (data.loadingPin && data.unloadingPin) {
+        routeLine = `📍 *Route:* ${data.loadingPin} (${data.loadingLocation || "Origin"}) ➔ ${data.unloadingPin} (${data.unloadingLocation || "Destination"})\n`;
+      }
+
       response =
         "✅ *Booking Request Submitted Successfully!*\n\n" +
-        `📍 *Route:* ${data.loadingPin} (${data.loadingLocation || "Origin"}) ➔ ${data.unloadingPin} (${data.unloadingLocation || "Destination"})\n` +
+        routeLine +
         `📦 *Cargo:* ${data.cargoType}${data.fclType ? ` (${data.fclType} - ${data.containerType || ""})` : ""}\n` +
         `🚛 *Vehicle / Trailer:* ${data.vehicleSubType || data.vehicleType || "Standard"}\n` +
         (data.bodyType ? `🚚 *Body Type:* ${data.bodyType}\n` : "") +
@@ -2391,10 +2408,13 @@ serve(async (req: Request) => {
                 }
               }
             } else if (output.state === "loading_time") {
+              const backHint = parsedData.cargoType === "Domestic" ? "Reply Back to edit Unloading Pincode" : "Reply Back to edit Loading Date";
               if (output.response && output.response.startsWith("❌")) {
                 await sendWhatsAppText(output.phone, output.response);
+                await sendWhatsAppTimeSlotButtons(output.phone, undefined, backHint);
+              } else {
+                await sendWhatsAppTimeSlotButtons(output.phone, output.response, backHint);
               }
-              await sendWhatsAppTimeSlotButtons(output.phone);
             } else if (output.state === "main_menu") {
               await sendWhatsAppMainMenuButtons(output.phone);
             } else if (output.response) {
