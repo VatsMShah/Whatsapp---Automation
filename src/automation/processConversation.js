@@ -82,9 +82,9 @@ function processConversation(waMessagePayload, masterRows) {
         'We provide reliable logistics solutions across India 🇮🇳\n\n' +
         '👉 Please select your requirement:\n\n' +
         '1️⃣ Book a Vehicle (Customer)\n' +
-        '2️⃣ Provide Vehicle (Transporter)\n' +
+        // '2️⃣ Provide Vehicle (Transporter)\n' +
         '3️⃣ Support\n\n' +
-        'Reply with *1, 2 or 3*',
+        'Reply with *1 or 3*',
       flowType: '',
       data: '{}',
     };
@@ -620,9 +620,9 @@ function processConversation(waMessagePayload, masterRows) {
         'We provide reliable logistics solutions across India 🇮🇳\n\n' +
         '👉 Please select your requirement:\n\n' +
         '1️⃣ Book a Vehicle (Customer)\n' +
-        '2️⃣ Provide Vehicle (Transporter)\n' +
+        // '2️⃣ Provide Vehicle (Transporter)\n' +
         '3️⃣ Support\n\n' +
-        'Reply with *1, 2 or 3*';
+        'Reply with *1 or 3*';
     } else if (message === 'cta_ai' || lowerMessage === 'know about traket' || lowerMessage.includes('know about traket')) {
       state = 'cta_ai';
       response =

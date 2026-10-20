@@ -295,7 +295,7 @@ async function sendWhatsAppMainMenuButtons(to: string) {
         action: {
           buttons: [
             { type: "reply", reply: { id: "1", title: "🚚 Book a Vehicle" } },
-            { type: "reply", reply: { id: "2", title: "🚛 Provide Vehicle" } },
+            // { type: "reply", reply: { id: "2", title: "🚛 Provide Vehicle" } },
             { type: "reply", reply: { id: "3", title: "🆘 Support" } },
           ],
         },
