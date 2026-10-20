@@ -913,6 +913,23 @@ async function isValidSignature(rawBody: string, signatureHeader: string | null)
   }
 }
 
+function formatDisplayPhone(rawPhone: string): string {
+  if (!rawPhone || rawPhone === "unknown_user") return "";
+  const trimmed = rawPhone.trim();
+  const cleaned = trimmed.replace(/\D/g, "");
+  if (cleaned.length === 10) {
+    return `+91 ${cleaned}`;
+  }
+  if (cleaned.length === 11 && cleaned.startsWith("0")) {
+    return `+91 ${cleaned.slice(1)}`;
+  }
+  if (cleaned.length === 12 && cleaned.startsWith("91")) {
+    return `+91 ${cleaned.slice(2)}`;
+  }
+  if (trimmed.startsWith("+")) return trimmed;
+  return `+${trimmed}`;
+}
+
 // =====================================================================
 // CONVERSATION STATE MACHINE
 // =====================================================================
@@ -1265,6 +1282,10 @@ async function processConversation(chat: any, masterRows: any[]) {
       delete data.contactName;
       state = "contact_name";
       response = "👤 Enter *Contact Person Name*:\n\n_(Reply *Back* to edit Company Name)_";
+    } else if (state === "alternate_phone") {
+      delete data.email;
+      state = "email";
+      response = "📧 Enter your *Email Address*:\n(or type *Skip*)\n\n_(Reply *Back* to edit Contact Name)_";
     }
     // Transporter Provider Flow - Step Back
     else if (["provider_tempo_size", "provider_truck_size", "provider_container_size", "provider_trailer_size"].includes(state)) {
@@ -2000,6 +2021,24 @@ async function processConversation(chat: any, masterRows: any[]) {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (isSkip || emailRegex.test(message.trim())) {
       data.email = isSkip ? "" : message.trim();
+      state = "alternate_phone";
+      response =
+        "📱 Enter your *Alternate Number*:\n" +
+        "(or type *Skip*)\n\n" +
+        "_(Reply *Back* to edit Email Address)_";
+    } else {
+      response =
+        "❌ Invalid email format.\n\nPlease enter a valid email address (e.g., rahul@gmail.com, info@company.co.in)\n" +
+        "or type *Skip*:\n\n" +
+        "_(Reply *Back* to edit Contact Name)_";
+    }
+  } else if (state === "alternate_phone") {
+    const isSkip = ["skip", "na", "n/a", "no", "none", "nil"].includes(lowerMessage);
+    const cleanDigits = message.replace(/\D/g, "");
+    const isValidPhone = !/[a-zA-Z]/.test(message) && cleanDigits.length >= 10 && cleanDigits.length <= 15;
+
+    if (isSkip || isValidPhone) {
+      data.alternatePhone = isSkip ? "" : formatDisplayPhone(message.trim());
       data.phone = phone;
       state = "cta_menu";
 
@@ -2031,6 +2070,9 @@ async function processConversation(chat: any, masterRows: any[]) {
         routeLine = `📍 *Route:* ${data.loadingPin} (${data.loadingLocation || "Origin"}) ➔ ${data.unloadingPin} (${data.unloadingLocation || "Destination"})\n`;
       }
 
+      const displayPhone = formatDisplayPhone(data.phone || phone);
+      const displayAltPhone = data.alternatePhone ? formatDisplayPhone(data.alternatePhone) : "";
+
       response =
         "✅ *Booking Request Submitted Successfully!*\n\n" +
         routeLine +
@@ -2047,10 +2089,16 @@ async function processConversation(chat: any, masterRows: any[]) {
         (logisticsDetails ? `\n${logisticsDetails}` : "") +
         `📅 *Loading Date & Time:* ${data.loadingDate}${data.loadingTime ? ` (${data.loadingTime})` : ""}\n` +
         `👤 *Contact:* ${data.contactName} (${data.company})\n` +
-        (data.email ? `📧 *Email:* ${data.email}\n\n` : "\n") +
-        "Our team is finding the best quote and will contact you shortly! 🚛💨";
+        (displayPhone ? `📱 *Number:* ${displayPhone}\n` : "") +
+        (displayAltPhone ? `📞 *Alternate Number:* ${displayAltPhone}\n` : "") +
+        (data.email ? `📧 *Email:* ${data.email}\n` : "") +
+        "\nOur team is finding the best quote and will contact you shortly! 🚛💨";
     } else {
-      response = "❌ Invalid email format.\n\nPlease enter a valid email address (e.g., rahul@gmail.com, info@company.co.in)\nor type *Skip*:\n\n_(Reply *Back* to edit Contact Name)_";
+      response =
+        "❌ Invalid phone number.\n\n" +
+        "Please enter a valid 10-digit mobile number (e.g., 9820500159)\n" +
+        "or type *Skip*:\n\n" +
+        "_(Reply *Back* to edit Email Address)_";
     }
   }
 
@@ -2462,6 +2510,9 @@ serve(async (req: Request) => {
               if (parsedData.emptyYard && !remarks.includes(parsedData.emptyYard)) {
                 remarks = remarks ? `Empty Yard: ${parsedData.emptyYard} | ${remarks}` : `Empty Yard: ${parsedData.emptyYard}`;
               }
+              if (parsedData.alternatePhone && !remarks.includes(parsedData.alternatePhone)) {
+                remarks = remarks ? `Alt Phone: ${parsedData.alternatePhone} | ${remarks}` : `Alt Phone: ${parsedData.alternatePhone}`;
+              }
 
               await supabase.from("book_vehicle").upsert({
                 user_id: output.user_id,
@@ -2497,6 +2548,7 @@ serve(async (req: Request) => {
                   stuffing_address: parsedData.stuffingAddress || "",
                   port_cfs: parsedData.portCfs || "",
                   cargo_dimensions: parsedData.dimensions || "",
+                  alternate_phone: parsedData.alternatePhone || "",
                 },
                 updated_at: output.updated_at,
               });

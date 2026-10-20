@@ -42,6 +42,7 @@ async function persistBookVehicle(output) {
     contactName: data.contactName || existing.contactName || '',
     phone: data.phone || existing.phone || '',
     email: data.email || existing.email || '',
+    alternatePhone: data.alternatePhone || existing.alternatePhone || '',
     website: data.website || existing.website || '',
     fclType: data.fclType || existing.fclType || '',
     containerType: data.containerType || existing.containerType || '',

@@ -71,6 +71,7 @@ function mapBookToJS(dbRow) {
     company: dbRow.company_name,
     contactName: dbRow.contact_name,
     email: dbRow.email,
+    alternatePhone: flow.alternate_phone || dbRow.alternate_phone || '',
     remarks: dbRow.remarks,
     updated_at: dbRow.updated_at,
     loadingPin: flow.loading_pin || dbRow.origin,
@@ -112,6 +113,9 @@ function mapBookToDB(jsRow) {
   if (jsRow.emptyYard && !remarks.includes(jsRow.emptyYard)) {
     remarks = remarks ? `Empty Yard: ${jsRow.emptyYard} | ${remarks}` : `Empty Yard: ${jsRow.emptyYard}`;
   }
+  if (jsRow.alternatePhone && !remarks.includes(jsRow.alternatePhone)) {
+    remarks = remarks ? `Alt Phone: ${jsRow.alternatePhone} | ${remarks}` : `Alt Phone: ${jsRow.alternatePhone}`;
+  }
 
   return {
     user_id: jsRow.user_id,
@@ -147,6 +151,7 @@ function mapBookToDB(jsRow) {
       stuffing_address: jsRow.stuffingAddress || '',
       port_cfs: jsRow.portCfs || '',
       cargo_dimensions: jsRow.dimensions || '',
+      alternate_phone: jsRow.alternatePhone || '',
       website: jsRow.website || '',
     },
     updated_at: jsRow.updated_at || new Date().toISOString(),

@@ -599,6 +599,7 @@ function processConversation(waMessagePayload, masterRows) {
       'Loading Date :' + (data.loadingDate || '') + '\n\n' +
       'Name :' + (data.contactName || '') + '\n\n' +
       'Phone Number :' + (data.phone || '') + '\n\n' +
+      (data.alternatePhone ? ('Alternate Number :' + data.alternatePhone + '\n\n') : '') +
       'Thank you for Partnering with Us 🤝';
   } else if (state === 'support_flow') {
     state = 'cta_menu';
