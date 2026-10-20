@@ -160,6 +160,70 @@ const STATE_2DIGIT_MAP: Record<string, { state: string; lat: number; lng: number
   '83': { state: 'Jharkhand', lat: 23.34, lng: 85.30 },
 };
 
+// In-memory + LocalStorage cache for dynamically fetched India Post PIN codes
+const dynamicPinCache = new Map<string, { city: string; state: string; label: string }>();
+
+if (typeof window !== 'undefined' && window.localStorage) {
+  try {
+    const raw = localStorage.getItem('traket_dynamic_pins');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      Object.entries(parsed).forEach(([k, v]: [string, any]) => dynamicPinCache.set(k, v));
+    }
+  } catch {}
+}
+
+/**
+ * Automatically fetch official India Post details for any 6-digit Indian PIN in the background
+ */
+export async function autoFetchPostalPin(pin: string): Promise<{ city: string; state: string; label: string } | null> {
+  const digits = (pin || '').replace(/[^0-9]/g, '');
+  if (digits.length !== 6) return null;
+
+  if (dynamicPinCache.has(digits)) {
+    return dynamicPinCache.get(digits)!;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
+    const res = await fetch(`https://api.postalpincode.in/pincode/${digits}`, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    const data = await res.json();
+    if (Array.isArray(data) && data[0]?.Status === 'Success' && Array.isArray(data[0]?.PostOffice) && data[0].PostOffice.length > 0) {
+      const po = data[0].PostOffice[0];
+      const name = String(po.Name || '').trim();
+      const district = String(po.District || '').trim();
+      const state = String(po.State || '').trim();
+
+      const city = district && name && district.toLowerCase() !== name.toLowerCase()
+        ? `${name}, ${district}`
+        : (district || name);
+
+      const result = {
+        city,
+        state,
+        label: `${city} (${state})`,
+      };
+
+      dynamicPinCache.set(digits, result);
+
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          const serializable: Record<string, any> = {};
+          dynamicPinCache.forEach((v, k) => { serializable[k] = v; });
+          localStorage.setItem('traket_dynamic_pins', JSON.stringify(serializable));
+        } catch {}
+      }
+
+      return result;
+    }
+  } catch {}
+
+  return null;
+}
+
 export function resolvePinCode(pin: string): { city: string; state: string; label: string } {
   if (!pin || pin.trim().length === 0) {
     return { city: 'Unknown', state: 'India', label: 'India' };
@@ -173,7 +237,12 @@ export function resolvePinCode(pin: string): { city: string; state: string; labe
     return { city: raw, state: 'India', label: raw };
   }
 
-  // 1. Direct 3-digit prefix lookup
+  // 1. Check dynamic India Post cache first
+  if (dynamicPinCache.has(digits)) {
+    return dynamicPinCache.get(digits)!;
+  }
+
+  // 2. Direct 3-digit prefix lookup (instant)
   const prefix3 = digits.slice(0, 3);
   const info3 = PIN_PREFIX_MAP[prefix3];
   if (info3) {
@@ -184,15 +253,24 @@ export function resolvePinCode(pin: string): { city: string; state: string; labe
     };
   }
 
-  // 2. 2-digit regional fallback lookup
+  // 3. 2-digit regional fallback lookup
   const prefix2 = digits.slice(0, 2);
   const info2 = STATE_2DIGIT_MAP[prefix2];
   if (info2) {
+    // Trigger background auto-fetch if 6 digits so next render has exact town
+    if (digits.length === 6) {
+      autoFetchPostalPin(digits).catch(() => {});
+    }
     return {
       city: info2.state,
       state: info2.state,
       label: `${info2.state} (${digits})`,
     };
+  }
+
+  // Trigger background fetch if 6 digits
+  if (digits.length === 6) {
+    autoFetchPostalPin(digits).catch(() => {});
   }
 
   return { city: digits, state: 'India', label: `PIN ${digits}` };

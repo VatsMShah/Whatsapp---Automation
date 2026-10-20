@@ -2532,7 +2532,11 @@ serve(async (req: Request) => {
                 remarks: remarks,
                 flow_data: {
                   loading_pin: parsedData.loadingPin || "",
+                  loading_location: parsedData.loadingLocation || "",
+                  loading_district: parsedData.loadingDistrict || "",
                   unloading_pin: parsedData.unloadingPin || "",
+                  unloading_location: parsedData.unloadingLocation || "",
+                  unloading_district: parsedData.unloadingDistrict || "",
                   vehicle_type: parsedData.vehicleType || "",
                   vehicle_sub_type: parsedData.vehicleSubType || "",
                   body_type: parsedData.bodyType || "",

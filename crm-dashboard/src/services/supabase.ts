@@ -57,6 +57,18 @@ class SupabaseDataService {
     const destInfo = resolvePinCode(destination);
     const distance = estimateDistanceKm(origin, destination);
 
+    const originCity =
+      flow.loading_location ||
+      flow.loadingLocation ||
+      flow.loading_district ||
+      originInfo.city;
+
+    const destinationCity =
+      flow.unloading_location ||
+      flow.unloadingLocation ||
+      flow.unloading_district ||
+      destInfo.city;
+
     const vehicleOrContainer =
       b.vehicle_or_container ||
       b.vehicleType ||
@@ -98,8 +110,8 @@ class SupabaseDataService {
       flow_data: flow,
 
       // Geocoded details
-      originCity: originInfo.city,
-      destinationCity: destInfo.city,
+      originCity: originCity,
+      destinationCity: destinationCity,
       estimatedDistanceKm: distance,
     };
   }
