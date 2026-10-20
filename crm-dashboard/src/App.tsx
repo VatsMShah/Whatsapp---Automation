@@ -154,7 +154,7 @@ export function App() {
   const newBookingCount = bookings.filter((b) => b.status === 'new').length;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#090d16] text-slate-100 font-sans selection:bg-emerald-500/30">
+    <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Sidebar Navigation */}
       <Sidebar
         currentTab={currentTab}
