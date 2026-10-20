@@ -13,7 +13,9 @@
     "tunnel": "npx ngrok http 3000",
     "supabase:deploy": "npx supabase functions deploy --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api",
     "supabase:deploy:webhook": "npx supabase functions deploy webhook --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api",
-    "supabase:deploy:traket": "npx supabase functions deploy TraketFUnction --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api"
+    "supabase:deploy:traket": "npx supabase functions deploy TraketFUnction --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api",
+    "dashboard:dev": "npm --prefix crm-dashboard run dev",
+    "dashboard:build": "npm --prefix crm-dashboard run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.0",
