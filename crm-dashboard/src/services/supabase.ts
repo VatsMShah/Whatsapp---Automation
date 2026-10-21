@@ -85,7 +85,15 @@ class SupabaseDataService {
 
       const localMap = this.getLocalStatuses();
 
-      return bookingsRes.data.map((d: any) => {
+      // Only include completed orders in Freight Orders Desk
+      // Incomplete/half-chats are tracked in users_master -> Live Bot Sessions
+      const validCompletedOrders = bookingsRes.data.filter((d: any) => {
+        const hasRoute = Boolean(d.origin && d.destination);
+        const isCompleted = d.state === 'cta_menu' || d.state === 'main_menu';
+        return hasRoute && isCompleted;
+      });
+
+      return validCompletedOrders.map((d: any) => {
         const dbStatus = statusMap.get(d.user_id);
         const localStatus = localMap[d.user_id];
         const statusEntry = dbStatus || localStatus;

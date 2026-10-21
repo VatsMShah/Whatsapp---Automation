@@ -112,7 +112,12 @@ async function persistSupport(output) {
 async function persistToFlowSheet(output) {
   switch (output.flowType) {
     case 'book':
-      return persistBookVehicle(output);
+      // Only persist to book_vehicle if the order is completed (state === 'cta_menu')
+      // Partial/in-progress chats remain in users_master (Live Bot Sessions)
+      if (output.state === 'cta_menu') {
+        return persistBookVehicle(output);
+      }
+      return null;
     case 'provider':
       return persistProvideVehicle(output);
     case 'support':
