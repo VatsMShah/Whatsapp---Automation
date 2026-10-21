@@ -28,27 +28,79 @@ class SupabaseDataService {
     this.client = createClient(SUPABASE_URL, SUPABASE_KEY);
   }
 
-  // --- FREIGHT BOOKINGS (Unified book_vehicle table) ---
+  // Cache helper for lead status so UI is immediately responsive
+  private getLocalStatuses(): Record<string, { status: FreightBooking['status']; remarks?: string }> {
+    try {
+      const stored = localStorage.getItem('traket_lead_statuses');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private setLocalStatus(userId: string, status: FreightBooking['status'], remarks?: string) {
+    try {
+      const current = this.getLocalStatuses();
+      current[userId] = {
+        status,
+        ...(remarks !== undefined ? { remarks } : current[userId]?.remarks ? { remarks: current[userId].remarks } : {}),
+      };
+      localStorage.setItem('traket_lead_statuses', JSON.stringify(current));
+    } catch {
+      // ignore
+    }
+  }
+
+  // --- FREIGHT BOOKINGS (book_vehicle untouched + separate lead_status table) ---
   async getBookings(): Promise<FreightBooking[]> {
     try {
-      const { data, error } = await this.client
-        .from('book_vehicle')
-        .select('*')
-        .order('updated_at', { ascending: false });
+      // Fetch bookings and separate lead_status table in parallel
+      const [bookingsRes, statusRes] = await Promise.all([
+        this.client
+          .from('book_vehicle')
+          .select('*')
+          .order('updated_at', { ascending: false }),
+        this.client
+          .from('lead_status')
+          .select('*'),
+      ]);
 
-      if (error || !data) {
-        console.warn('Supabase getBookings returned error or empty:', error);
+      if (bookingsRes.error || !bookingsRes.data) {
+        console.warn('Supabase getBookings returned error or empty:', bookingsRes.error);
         return [];
       }
 
-      return data.map((d: any) => this.enhanceBooking(d));
+      // Map statuses from lead_status table
+      const statusMap = new Map<string, { status: FreightBooking['status']; remarks?: string }>();
+      if (statusRes.data && Array.isArray(statusRes.data)) {
+        for (const s of statusRes.data) {
+          if (s.user_id) {
+            statusMap.set(s.user_id, {
+              status: s.status as FreightBooking['status'],
+              remarks: s.remarks,
+            });
+          }
+        }
+      }
+
+      const localMap = this.getLocalStatuses();
+
+      return bookingsRes.data.map((d: any) => {
+        const dbStatus = statusMap.get(d.user_id);
+        const localStatus = localMap[d.user_id];
+        const statusEntry = dbStatus || localStatus;
+        return this.enhanceBooking(d, statusEntry);
+      });
     } catch (err) {
       console.error('Error fetching bookings from Supabase:', err);
       return [];
     }
   }
 
-  private enhanceBooking(b: any): FreightBooking {
+  private enhanceBooking(
+    b: any,
+    statusEntry?: { status: FreightBooking['status']; remarks?: string }
+  ): FreightBooking {
     const flow = b.flow_data || {};
     const origin = b.origin || b.loadingPin || flow.loading_pin || flow.loading_yard || flow.stuffing_address || '';
     const destination = b.destination || b.unloadingPin || flow.unloading_pin || flow.unloading_address || flow.port_cfs || '';
@@ -85,8 +137,11 @@ class SupabaseDataService {
     const contactName = b.contact_name || b.contactName || flow.contact_name || '';
     const phone = b.phone || flow.phone || '';
     const alternatePhone = b.alternate_phone || flow.alternate_phone || '';
-    const remarks = b.remarks || flow.remarks || '';
-    const status = (b.status as FreightBooking['status']) || 'new';
+    const remarks =
+      statusEntry && statusEntry.remarks !== undefined && statusEntry.remarks !== ''
+        ? statusEntry.remarks
+        : b.remarks || flow.remarks || '';
+    const status = statusEntry?.status || 'new';
 
     return {
       user_id: b.user_id,
@@ -116,26 +171,36 @@ class SupabaseDataService {
     };
   }
 
+  // Save status and lead information to separate lead_status table (book_vehicle is completely untouched)
   async updateBookingStatus(
     userId: string,
     newStatus: FreightBooking['status'],
-    remarks?: string
+    remarks?: string,
+    phone?: string,
+    name?: string
   ): Promise<boolean> {
     try {
+      this.setLocalStatus(userId, newStatus, remarks);
+
       const payload: Record<string, any> = {
+        user_id: userId,
         status: newStatus,
         updated_at: new Date().toISOString(),
       };
-      if (remarks !== undefined) {
-        payload.remarks = remarks;
-      }
+      if (phone !== undefined) payload.phone = phone;
+      if (name !== undefined) payload.name = name;
+      if (remarks !== undefined) payload.remarks = remarks;
 
       const { error } = await this.client
-        .from('book_vehicle')
-        .update(payload)
-        .eq('user_id', userId);
+        .from('lead_status')
+        .upsert(payload, { onConflict: 'user_id' });
 
-      return !error;
+      if (error) {
+        console.warn('Could not save to lead_status table (will use local cache until table is created in Supabase):', error.message);
+        return false;
+      }
+
+      return true;
     } catch (e) {
       console.error('Failed to update booking status:', e);
       return false;

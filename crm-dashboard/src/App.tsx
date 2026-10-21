@@ -23,6 +23,7 @@ export function App() {
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Fetch real data from Supabase
   const loadData = async () => {
@@ -57,7 +58,14 @@ export function App() {
     status: FreightBooking['status'],
     remarks?: string
   ) => {
-    await dbService.updateBookingStatus(userId, status, remarks);
+    const booking = bookings.find((b) => b.user_id === userId);
+    await dbService.updateBookingStatus(
+      userId,
+      status,
+      remarks,
+      booking?.phone,
+      booking?.contact_name
+    );
     setBookings((prev) =>
       prev.map((b) =>
         b.user_id === userId
@@ -160,9 +168,8 @@ export function App() {
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
         clientProfile={clientProfile}
-        bookingCount={bookings.length}
-        newBookingCount={newBookingCount}
-        inquiryCount={supportTickets.length + sessions.length}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
       />
 
       {/* Main Content Area */}

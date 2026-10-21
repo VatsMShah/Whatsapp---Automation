@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, RefreshCw, Download, ShieldCheck, UserCheck } from 'lucide-react';
+import { Search, RefreshCw, Download, ShieldCheck, UserCheck, Menu } from 'lucide-react';
 import { ClientCompanyProfile } from '../../types';
 
 interface HeaderProps {
