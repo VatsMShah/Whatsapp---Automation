@@ -4,6 +4,8 @@ import { Header } from './components/layout/Header';
 import { DashboardOverview } from './components/dashboard/DashboardOverview';
 import { BookingsTable } from './components/tables/BookingsTable';
 import { InquiriesDesk } from './components/inquiries/InquiriesDesk';
+import { TeamManager } from './components/team/TeamManager';
+import { RoleProvider, useRole } from './context/RoleContext';
 import { dbService, ACTIVE_CLIENT_PROFILE } from './services/supabase';
 import {
   FreightBooking,
@@ -11,9 +13,15 @@ import {
   SupportTicket,
   ClientCompanyProfile,
   DashboardTab,
+  Employee,
+  LeadAssignment,
 } from './types';
 
-export function App() {
+// Inner app that has access to RoleContext
+function AppInner() {
+  const { role, currentEmployee, switchToAdmin, switchToEmployee } = useRole();
+  const isAdmin = role === 'admin';
+
   const [currentTab, setCurrentTab] = useState<DashboardTab>('orders');
   const [clientProfile] = useState<ClientCompanyProfile>(ACTIVE_CLIENT_PROFILE);
 
@@ -21,6 +29,8 @@ export function App() {
   const [bookings, setBookings] = useState<FreightBooking[]>([]);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [assignments, setAssignments] = useState<Record<string, LeadAssignment>>({});
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -29,14 +39,18 @@ export function App() {
   const loadData = async () => {
     setIsRefreshing(true);
     try {
-      const [b, s, t] = await Promise.all([
+      const [b, s, t, emps] = await Promise.all([
         dbService.getBookings(),
         dbService.getSessions(),
         dbService.getSupportTickets(),
+        dbService.getEmployees(),
       ]);
       setBookings(b || []);
       setSessions(s || []);
       setSupportTickets(t || []);
+      setEmployees(emps || []);
+      // Load assignments from local cache (also synced to Supabase)
+      setAssignments(dbService.getLocalAssignments());
     } catch (err) {
       console.error('Failed to load Supabase data:', err);
     } finally {
@@ -46,12 +60,18 @@ export function App() {
 
   useEffect(() => {
     loadData();
-    // Live polling every 20s to capture incoming WhatsApp interactions
     const interval = setInterval(() => {
       loadData();
     }, 20000);
     return () => clearInterval(interval);
   }, []);
+
+  // If employee switches to a tab they can't access, reset to orders
+  useEffect(() => {
+    if (!isAdmin && (currentTab === 'overview' || currentTab === 'team')) {
+      setCurrentTab('orders');
+    }
+  }, [isAdmin, currentTab]);
 
   const handleUpdateBookingStatus = async (
     userId: string,
@@ -85,24 +105,35 @@ export function App() {
     );
   };
 
+  const handleAssignLead = async (userId: string, employeeId: string) => {
+    await dbService.assignLead(userId, employeeId);
+    setAssignments(dbService.getLocalAssignments());
+  };
+
+  const handleTransferLead = async (userId: string, newEmployeeId: string, note: string) => {
+    await dbService.transferLead(userId, newEmployeeId, note);
+    setAssignments(dbService.getLocalAssignments());
+  };
+
+  const handleSaveEmployee = async (emp: Omit<Employee, 'id' | 'created_at'>) => {
+    await dbService.upsertEmployee(emp);
+    const updated = dbService.getLocalEmployees();
+    setEmployees(updated);
+  };
+
+  const handleDeactivateEmployee = async (employeeId: string) => {
+    await dbService.deactivateEmployee(employeeId);
+    const updated = dbService.getLocalEmployees();
+    setEmployees(updated);
+  };
+
   const handleExportCsv = () => {
     if (bookings.length === 0) return;
 
     const headers = [
-      'Date',
-      'Status',
-      'Origin',
-      'Destination',
-      'Cargo Type',
-      'Vehicle / Container',
-      'Weight',
-      'Loading Date',
-      'Time Slot',
-      'Contact Person',
-      'Primary Phone',
-      'Alternate Phone',
-      'Company Name',
-      'Remarks',
+      'Date', 'Status', 'Origin', 'Destination', 'Cargo Type',
+      'Vehicle / Container', 'Weight', 'Loading Date', 'Time Slot',
+      'Contact Person', 'Primary Phone', 'Alternate Phone', 'Company Name', 'Remarks',
     ];
 
     const rows = bookings.map((b) => [
@@ -137,8 +168,10 @@ export function App() {
     switch (currentTab) {
       case 'orders':
         return {
-          title: 'Freight Orders Desk',
-          subtitle: 'Live customer cargo demands with 1-click WhatsApp quote dispatch',
+          title: isAdmin ? 'Freight Orders Desk' : 'My Assigned Leads',
+          subtitle: isAdmin
+            ? 'Live customer cargo demands with 1-click WhatsApp quote dispatch'
+            : `Leads assigned to ${currentEmployee?.name || 'you'} — update status and add notes`,
         };
       case 'overview':
         return {
@@ -150,6 +183,11 @@ export function App() {
           title: 'Live Inquiries & Support Desk',
           subtitle: 'Direct customer help tickets and active in-progress bot conversation sessions',
         };
+      case 'team':
+        return {
+          title: 'Team Management',
+          subtitle: 'Manage employees, assign leads, and track team performance',
+        };
       default:
         return {
           title: 'Traket Logistics Desk',
@@ -159,7 +197,6 @@ export function App() {
   };
 
   const { title, subtitle } = getTabHeader();
-  const newBookingCount = bookings.filter((b) => b.status === 'new').length;
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900">
@@ -170,6 +207,8 @@ export function App() {
         clientProfile={clientProfile}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+        role={role}
+        employeeName={currentEmployee?.name}
       />
 
       {/* Main Content Area */}
@@ -184,6 +223,11 @@ export function App() {
           onRefreshData={loadData}
           isRefreshing={isRefreshing}
           onExportCsv={handleExportCsv}
+          role={role}
+          currentEmployee={currentEmployee}
+          employees={employees}
+          onSwitchToAdmin={switchToAdmin}
+          onSwitchToEmployee={switchToEmployee}
         />
 
         {/* Dynamic Views */}
@@ -193,10 +237,16 @@ export function App() {
               bookings={bookings}
               searchQuery={searchQuery}
               onUpdateStatus={handleUpdateBookingStatus}
+              role={role}
+              currentEmployee={currentEmployee}
+              employees={employees}
+              assignments={assignments}
+              onAssignLead={handleAssignLead}
+              onTransferLead={handleTransferLead}
             />
           )}
 
-          {currentTab === 'overview' && (
+          {currentTab === 'overview' && isAdmin && (
             <DashboardOverview
               bookings={bookings}
               clientProfile={clientProfile}
@@ -212,9 +262,27 @@ export function App() {
               onUpdateSupportStatus={handleUpdateSupportStatus}
             />
           )}
+
+          {currentTab === 'team' && isAdmin && (
+            <TeamManager
+              employees={employees}
+              bookings={bookings}
+              assignments={assignments}
+              onSaveEmployee={handleSaveEmployee}
+              onDeactivateEmployee={handleDeactivateEmployee}
+            />
+          )}
         </main>
       </div>
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <RoleProvider>
+      <AppInner />
+    </RoleProvider>
   );
 }
 

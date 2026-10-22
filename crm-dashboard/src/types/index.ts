@@ -53,4 +53,23 @@ export interface ClientCompanyProfile {
   supabaseUrl: string;
 }
 
-export type DashboardTab = 'orders' | 'overview' | 'inquiries';
+export type DashboardTab = 'orders' | 'overview' | 'inquiries' | 'team';
+
+export interface Employee {
+  id: string;           // UUID primary key
+  employee_id: string;  // Human-readable e.g. EMP001
+  name: string;
+  email?: string;
+  phone?: string;
+  department?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface LeadAssignment {
+  user_id: string;              // freight booking user_id
+  assigned_to?: string;         // employee_id
+  assigned_at?: string;
+  transferred_from?: string;    // previous employee_id
+  transfer_note?: string;
+}

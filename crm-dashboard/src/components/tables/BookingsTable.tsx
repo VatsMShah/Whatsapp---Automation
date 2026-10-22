@@ -13,25 +13,52 @@ import {
   Hash,
   ArrowRight,
   Box,
+  UserCheck,
+  ArrowRightLeft,
+  Users,
 } from 'lucide-react';
-import { FreightBooking } from '../../types';
+import { FreightBooking, Employee, LeadAssignment } from '../../types';
+import { UserRole } from '../../context/RoleContext';
 
 interface BookingsTableProps {
   bookings: FreightBooking[];
   searchQuery: string;
   onUpdateStatus: (userId: string, status: FreightBooking['status'], remarks?: string) => void;
+  // Role-based props
+  role?: UserRole;
+  currentEmployee?: Employee | null;
+  employees?: Employee[];
+  assignments?: Record<string, LeadAssignment>;
+  onAssignLead?: (userId: string, employeeId: string) => Promise<void>;
+  onTransferLead?: (userId: string, newEmployeeId: string, note: string) => Promise<void>;
 }
+
 
 export const BookingsTable: React.FC<BookingsTableProps> = ({
   bookings,
   searchQuery,
   onUpdateStatus,
+  role = 'admin',
+  currentEmployee = null,
+  employees = [],
+  assignments = {},
+  onAssignLead,
+  onTransferLead,
 }) => {
+  const isAdmin = role === 'admin';
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [cargoFilter, setCargoFilter] = useState<string>('all');
+  const [employeeFilter, setEmployeeFilter] = useState<string>('all');
   const [selectedBooking, setSelectedBooking] = useState<FreightBooking | null>(null);
   const [remarksInput, setRemarksInput] = useState<string>('');
   const [isSavingRemarks, setIsSavingRemarks] = useState(false);
+
+  // Transfer modal state
+  const [transferBooking, setTransferBooking] = useState<FreightBooking | null>(null);
+  const [transferTo, setTransferTo] = useState<string>('');
+  const [transferNote, setTransferNote] = useState<string>('');
+  const [isTransferring, setIsTransferring] = useState(false);
+  const [assigningId, setAssigningId] = useState<string | null>(null);
 
   // Helper to extract the new ID from `phone_newId` format
   const extractShortId = (userId: string) => {
@@ -75,7 +102,67 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
     const matchesStatus = statusFilter === 'all' || b.status === statusFilter;
     const matchesCargo = cargoFilter === 'all' || b.cargo_type.toLowerCase() === cargoFilter.toLowerCase();
 
-    return matchesSearch && matchesStatus && matchesCargo;
+    // Employee view: only show leads assigned to current employee
+    if (!isAdmin && currentEmployee) {
+      const a = assignments[b.user_id];
+      if (!a || a.assigned_to !== currentEmployee.employee_id) return false;
+    }
+
+    // Admin employee filter dropdown
+    const assignment = assignments[b.user_id];
+    const matchesEmployee =
+      employeeFilter === 'all' ||
+      (employeeFilter === 'unassigned' && !assignment?.assigned_to) ||
+      assignment?.assigned_to === employeeFilter;
+
+    return matchesSearch && matchesStatus && matchesCargo && matchesEmployee;
+  });
+
+  // Assignment helpers
+  const getAssignedEmployee = (userId: string): Employee | undefined => {
+    const a = assignments[userId];
+    if (!a?.assigned_to) return undefined;
+    return employees.find((e) => e.employee_id === a.assigned_to);
+  };
+
+  const handleAssignLead = async (userId: string, employeeId: string) => {
+    if (!onAssignLead) return;
+    setAssigningId(userId);
+    await onAssignLead(userId, employeeId);
+    setAssigningId(null);
+  };
+
+  const openTransferModal = (b: FreightBooking) => {
+    setTransferBooking(b);
+    setTransferTo('');
+    setTransferNote('');
+  };
+
+  const handleTransfer = async () => {
+    if (!transferBooking || !transferTo || !onTransferLead) return;
+    setIsTransferring(true);
+    await onTransferLead(transferBooking.user_id, transferTo, transferNote);
+    setIsTransferring(false);
+    setTransferBooking(null);
+  };
+
+  // Pre-filtered base set for tab counts — respects employee scope & employee filter dropdown
+  // (but ignores statusFilter so counts always reflect true totals per tab)
+  const scopedBookings = bookings.filter((b) => {
+    // Employee view: only show leads assigned to current employee
+    if (!isAdmin && currentEmployee) {
+      const a = assignments[b.user_id];
+      if (!a || a.assigned_to !== currentEmployee.employee_id) return false;
+    }
+    // Admin employee filter dropdown
+    if (isAdmin && employeeFilter !== 'all') {
+      const assignment = assignments[b.user_id];
+      const matchesEmployee =
+        (employeeFilter === 'unassigned' && !assignment?.assigned_to) ||
+        assignment?.assigned_to === employeeFilter;
+      if (!matchesEmployee) return false;
+    }
+    return true;
   });
 
   const getStatusBadge = (status: FreightBooking['status']) => {
@@ -145,11 +232,11 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
         {/* Status Filters */}
         <div className="flex items-center space-x-1.5 overflow-x-auto text-xs">
           {[
-            { id: 'all', label: 'All Orders', count: bookings.length },
-            { id: 'new', label: 'New Leads', count: bookings.filter((b) => b.status === 'new').length },
-            { id: 'quoted', label: 'Quoted', count: bookings.filter((b) => b.status === 'quoted').length },
-            { id: 'confirmed', label: 'Confirmed', count: bookings.filter((b) => b.status === 'confirmed').length },
-            { id: 'completed', label: 'Completed', count: bookings.filter((b) => b.status === 'completed').length },
+            { id: 'all', label: isAdmin ? 'All Orders' : 'My Leads', count: scopedBookings.length },
+            { id: 'new', label: 'New Leads', count: scopedBookings.filter((b) => b.status === 'new').length },
+            { id: 'quoted', label: 'Quoted', count: scopedBookings.filter((b) => b.status === 'quoted').length },
+            { id: 'confirmed', label: 'Confirmed', count: scopedBookings.filter((b) => b.status === 'confirmed').length },
+            { id: 'completed', label: 'Completed', count: scopedBookings.filter((b) => b.status === 'completed').length },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -172,18 +259,38 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
           ))}
         </div>
 
-        {/* Cargo Type Filter */}
-        <div className="flex items-center space-x-2 text-xs">
-          <span className="text-slate-500 font-medium">Cargo:</span>
-          <select
-            value={cargoFilter}
-            onChange={(e) => setCargoFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white"
-          >
-            <option value="all">All Cargo Types</option>
-            <option value="domestic">Domestic</option>
-            <option value="exim fcl">EXIM FCL</option>
-          </select>
+        <div className="flex items-center space-x-2 flex-wrap gap-2">
+          {/* Employee filter (admin only) */}
+          {isAdmin && employees.length > 0 && (
+            <div className="flex items-center space-x-2 text-xs">
+              <Users className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={employeeFilter}
+                onChange={(e) => setEmployeeFilter(e.target.value)}
+                className="bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white"
+              >
+                <option value="all">All Employees</option>
+                <option value="unassigned">Unassigned</option>
+                {employees.filter(e => e.is_active).map((e) => (
+                  <option key={e.employee_id} value={e.employee_id}>{e.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Cargo Type Filter */}
+          <div className="flex items-center space-x-2 text-xs">
+            <span className="text-slate-500 font-medium">Cargo:</span>
+            <select
+              value={cargoFilter}
+              onChange={(e) => setCargoFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white"
+            >
+              <option value="all">All Cargo Types</option>
+              <option value="domestic">Domestic</option>
+              <option value="exim fcl">EXIM FCL</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -203,6 +310,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                 <th className="py-3 px-3.5 whitespace-nowrap">Material / Goods</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">Loading Schedule</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">Company Name</th>
+                {isAdmin && <th className="py-3 px-3.5 whitespace-nowrap">Assigned To</th>}
                 <th className="py-3 px-3.5 whitespace-nowrap">Status</th>
                 <th className="py-3 px-3.5 text-right whitespace-nowrap">Details</th>
               </tr>
@@ -363,7 +471,48 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         )}
                       </td>
 
-                      {/* 11. Status Selector */}
+                      {/* 11. Assigned To (Admin only) */}
+                      {isAdmin && (
+                        <td className="py-3.5 px-3.5 whitespace-nowrap">
+                          {(() => {
+                            const assignedEmp = getAssignedEmployee(b.user_id);
+                            const a = assignments[b.user_id];
+                            return (
+                              <div className="space-y-1">
+                                <select
+                                  value={assignedEmp?.employee_id || ''}
+                                  disabled={assigningId === b.user_id}
+                                  onChange={(e) => handleAssignLead(b.user_id, e.target.value)}
+                                  className={`text-[11px] font-semibold rounded-lg px-2 py-1 border focus:outline-none cursor-pointer transition w-full ${
+                                    assignedEmp
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                      : 'bg-slate-50 text-slate-600 border-slate-200'
+                                  } disabled:opacity-60`}
+                                >
+                                  <option value="">Unassigned</option>
+                                  {employees.filter(e => e.is_active).map((e) => (
+                                    <option key={e.employee_id} value={e.employee_id}>{e.name}</option>
+                                  ))}
+                                </select>
+                                {assignedEmp && (
+                                  <button
+                                    onClick={() => openTransferModal(b)}
+                                    className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold flex items-center space-x-0.5"
+                                  >
+                                    <ArrowRightLeft className="w-3 h-3" />
+                                    <span>Transfer</span>
+                                    {a?.transferred_from && (
+                                      <span className="text-slate-400 font-normal ml-1">(transferred)</span>
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </td>
+                      )}
+
+                      {/* 12. Status Selector */}
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
                         <select
                           value={b.status}
@@ -381,7 +530,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         </select>
                       </td>
 
-                      {/* 12. Details Modal Trigger */}
+                      {/* 13. Details Modal Trigger */}
                       <td className="py-3.5 px-3.5 text-right whitespace-nowrap">
                         <button
                           onClick={() => openDetailsModal(b)}
@@ -529,6 +678,91 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                 className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer Lead Modal */}
+      {transferBooking && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-slate-900 flex items-center space-x-2">
+                <ArrowRightLeft className="w-5 h-5 text-blue-600" />
+                <span>Transfer Lead</span>
+              </h3>
+              <button
+                onClick={() => setTransferBooking(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700">
+              <div className="font-semibold text-slate-900">{transferBooking.contact_name}</div>
+              <div className="text-slate-500 mt-0.5">
+                {transferBooking.originCity || transferBooking.origin} → {transferBooking.destinationCity || transferBooking.destination}
+              </div>
+              {(() => {
+                const currentAssigned = getAssignedEmployee(transferBooking.user_id);
+                return currentAssigned ? (
+                  <div className="mt-1.5 text-[10px] text-amber-600 font-semibold">
+                    Currently assigned to: {currentAssigned.name}
+                  </div>
+                ) : null;
+              })()}
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                  Transfer To *
+                </label>
+                <select
+                  value={transferTo}
+                  onChange={(e) => setTransferTo(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Select employee...</option>
+                  {employees
+                    .filter((e) => e.is_active && e.employee_id !== getAssignedEmployee(transferBooking.user_id)?.employee_id)
+                    .map((e) => (
+                      <option key={e.employee_id} value={e.employee_id}>{e.name} ({e.employee_id})</option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                  Transfer Note (optional)
+                </label>
+                <textarea
+                  value={transferNote}
+                  onChange={(e) => setTransferNote(e.target.value)}
+                  placeholder="Reason for transfer, special instructions..."
+                  rows={2}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:border-blue-500 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-3 pt-2 border-t border-slate-200">
+              <button
+                onClick={() => setTransferBooking(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTransfer}
+                disabled={isTransferring || !transferTo}
+                className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-sm transition disabled:opacity-60"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>{isTransferring ? 'Transferring...' : 'Confirm Transfer'}</span>
               </button>
             </div>
           </div>

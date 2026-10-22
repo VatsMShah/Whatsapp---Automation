@@ -4,6 +4,8 @@ import {
   SessionRecord,
   SupportTicket,
   ClientCompanyProfile,
+  Employee,
+  LeadAssignment,
 } from '../types';
 import { resolvePinCode, estimateDistanceKm } from '../utils/pinResolver';
 
@@ -285,6 +287,127 @@ class SupabaseDataService {
       return false;
     }
   }
+
+  // --- EMPLOYEES ---
+  async getEmployees(): Promise<Employee[]> {
+    try {
+      const { data, error } = await this.client
+        .from('employees')
+        .select('*')
+        .order('created_at', { ascending: true });
+      if (error || !data) return this.getLocalEmployees();
+      // Persist to local cache
+      localStorage.setItem('traket_employees', JSON.stringify(data));
+      return data as Employee[];
+    } catch {
+      return this.getLocalEmployees();
+    }
+  }
+
+  getLocalEmployees(): Employee[] {
+    try {
+      const stored = localStorage.getItem('traket_employees');
+      if (stored) return JSON.parse(stored) as Employee[];
+    } catch {}
+    // Seed with defaults if nothing stored
+    const defaults: Employee[] = [
+      { id: '1', employee_id: 'EMP001', name: 'Preet Karani', email: 'preet@traket.in', phone: '', department: 'Sales', is_active: true, created_at: new Date().toISOString() },
+      { id: '2', employee_id: 'EMP002', name: 'Vatsal Shah', email: 'vatsal@traket.in', phone: '', department: 'Ops', is_active: true, created_at: new Date().toISOString() },
+      { id: '3', employee_id: 'EMP003', name: 'Anil Kumar', email: 'anil@traket.in', phone: '', department: 'Sales', is_active: true, created_at: new Date().toISOString() },
+    ];
+    localStorage.setItem('traket_employees', JSON.stringify(defaults));
+    return defaults;
+  }
+
+  async upsertEmployee(emp: Omit<Employee, 'id' | 'created_at'>): Promise<Employee | null> {
+    try {
+      const payload = { ...emp, updated_at: new Date().toISOString() };
+      const { data, error } = await this.client
+        .from('employees')
+        .upsert(payload, { onConflict: 'employee_id' })
+        .select()
+        .single();
+      if (error || !data) throw error;
+      // Refresh local cache
+      await this.getEmployees();
+      return data as Employee;
+    } catch {
+      // Fall back to local storage only
+      const all = this.getLocalEmployees();
+      const exists = all.findIndex((e) => e.employee_id === emp.employee_id);
+      const newEmp: Employee = { ...emp, id: emp.employee_id, created_at: new Date().toISOString() };
+      if (exists >= 0) all[exists] = newEmp; else all.push(newEmp);
+      localStorage.setItem('traket_employees', JSON.stringify(all));
+      return newEmp;
+    }
+  }
+
+  async deactivateEmployee(employeeId: string): Promise<boolean> {
+    try {
+      await this.client.from('employees').update({ is_active: false }).eq('employee_id', employeeId);
+    } catch {}
+    const all = this.getLocalEmployees().map((e) =>
+      e.employee_id === employeeId ? { ...e, is_active: false } : e
+    );
+    localStorage.setItem('traket_employees', JSON.stringify(all));
+    return true;
+  }
+
+  // --- LEAD ASSIGNMENTS ---
+  getLocalAssignments(): Record<string, LeadAssignment> {
+    try {
+      const stored = localStorage.getItem('traket_assignments');
+      return stored ? JSON.parse(stored) : {};
+    } catch { return {}; }
+  }
+
+  private setLocalAssignment(userId: string, a: LeadAssignment) {
+    const all = this.getLocalAssignments();
+    all[userId] = a;
+    localStorage.setItem('traket_assignments', JSON.stringify(all));
+  }
+
+  async assignLead(userId: string, employeeId: string): Promise<boolean> {
+    const assignment: LeadAssignment = {
+      user_id: userId,
+      assigned_to: employeeId,
+      assigned_at: new Date().toISOString(),
+    };
+    this.setLocalAssignment(userId, assignment);
+    try {
+      await this.client.from('lead_status').upsert(
+        { user_id: userId, assigned_to: employeeId, assigned_at: assignment.assigned_at },
+        { onConflict: 'user_id' }
+      );
+    } catch {}
+    return true;
+  }
+
+  async transferLead(userId: string, newEmployeeId: string, transferNote?: string): Promise<boolean> {
+    const existing = this.getLocalAssignments()[userId];
+    const assignment: LeadAssignment = {
+      user_id: userId,
+      assigned_to: newEmployeeId,
+      assigned_at: new Date().toISOString(),
+      transferred_from: existing?.assigned_to,
+      transfer_note: transferNote,
+    };
+    this.setLocalAssignment(userId, assignment);
+    try {
+      await this.client.from('lead_status').upsert(
+        {
+          user_id: userId,
+          assigned_to: newEmployeeId,
+          assigned_at: assignment.assigned_at,
+          transferred_from: assignment.transferred_from,
+          transfer_note: transferNote,
+        },
+        { onConflict: 'user_id' }
+      );
+    } catch {}
+    return true;
+  }
 }
 
 export const dbService = new SupabaseDataService();
+

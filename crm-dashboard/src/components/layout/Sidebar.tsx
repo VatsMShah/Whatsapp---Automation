@@ -5,8 +5,12 @@ import {
   MessageSquare,
   Radio,
   Menu,
+  Users,
+  ShieldCheck,
+  UserCircle,
 } from 'lucide-react';
 import { ClientCompanyProfile, DashboardTab } from '../../types';
+import { UserRole } from '../../context/RoleContext';
 
 interface SidebarProps {
   currentTab: DashboardTab;
@@ -14,6 +18,8 @@ interface SidebarProps {
   clientProfile: ClientCompanyProfile;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  role: UserRole;
+  employeeName?: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -22,28 +28,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
   clientProfile,
   isCollapsed,
   onToggleCollapse,
+  role,
+  employeeName,
 }) => {
+  const isAdmin = role === 'admin';
+
   const navItems: {
     id: DashboardTab;
     label: string;
     icon: React.ElementType;
+    adminOnly?: boolean;
   }[] = [
     {
       id: 'orders',
-      label: 'Freight Orders Desk',
+      label: isAdmin ? 'Freight Orders Desk' : 'My Leads',
       icon: Package,
     },
     {
       id: 'overview',
       label: 'Executive Overview',
       icon: LayoutDashboard,
+      adminOnly: true,
     },
     {
       id: 'inquiries',
       label: 'Live Inquiries & Help',
       icon: MessageSquare,
     },
+    {
+      id: 'team',
+      label: 'Team Management',
+      icon: Users,
+      adminOnly: true,
+    },
   ];
+
+  const visibleItems = navItems.filter((item) => !item.adminOnly || isAdmin);
 
   return (
     <aside
@@ -51,7 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         isCollapsed ? 'w-16' : 'w-64'
       }`}
     >
-      {/* App Branding (Clean top header without arrow) */}
+      {/* App Branding */}
       <div className="p-3.5 border-b border-slate-200 flex items-center min-h-[64px]">
         {!isCollapsed ? (
           <div className="flex items-center space-x-2.5 min-w-0">
@@ -76,15 +96,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* Navigation (Only clean icons and labels) */}
+      {/* Role Banner */}
+      {!isCollapsed && (
+        <div
+          className={`mx-2.5 mt-2.5 px-3 py-2 rounded-xl flex items-center space-x-2 ${
+            isAdmin
+              ? 'bg-blue-50 border border-blue-200'
+              : 'bg-violet-50 border border-violet-200'
+          }`}
+        >
+          {isAdmin ? (
+            <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+          ) : (
+            <UserCircle className="w-4 h-4 text-violet-600 shrink-0" />
+          )}
+          <div className="min-w-0">
+            <div
+              className={`text-[10px] font-extrabold uppercase tracking-wider ${
+                isAdmin ? 'text-blue-700' : 'text-violet-700'
+              }`}
+            >
+              {isAdmin ? 'Admin View' : 'Employee View'}
+            </div>
+            {!isAdmin && employeeName && (
+              <div className="text-[10px] text-violet-600 font-semibold truncate">
+                {employeeName}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Navigation */}
       <div className="flex-1 px-2.5 py-4 space-y-1 overflow-y-auto">
         {!isCollapsed && (
           <div className="px-2.5 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Operations
+            {isAdmin ? 'Operations' : 'My Workspace'}
           </div>
         )}
 
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentTab === item.id;
           return (
@@ -126,7 +177,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </div>
 
-      {/* Single three-lines logo button in the left column below */}
+      {/* Collapse Button */}
       <div className={`p-2.5 border-t border-slate-200 flex ${isCollapsed ? 'justify-center' : 'justify-start px-3'}`}>
         <button
           onClick={onToggleCollapse}
