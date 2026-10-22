@@ -53,7 +53,29 @@ export interface ClientCompanyProfile {
   supabaseUrl: string;
 }
 
-export type DashboardTab = 'orders' | 'overview' | 'inquiries' | 'team';
+export type DashboardTab = 'orders' | 'overview' | 'inquiries' | 'team' | 'backup';
+
+export interface BackupStats {
+  status: 'active' | 'error';
+  lastBackupAt: string;
+  backupDirectory?: string;
+  counts: {
+    book_vehicle: number;
+    users_master: number;
+    provide_vehicle: number;
+    support: number;
+    total: number;
+  };
+  pendingSupabaseSync: number;
+  supabase: {
+    online: boolean;
+    error?: string;
+  };
+  googleSheets: {
+    configured: boolean;
+    sheetId?: string | null;
+  };
+}
 
 export interface Employee {
   id: string;           // UUID primary key

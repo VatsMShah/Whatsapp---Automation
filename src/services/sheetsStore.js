@@ -11,6 +11,9 @@ let docPromise = null;
  * want to re-create this on every webhook call.)
  */
 function getDoc() {
+  if (!config.google?.isConfigured) {
+    throw new Error('Google Sheets is not configured in .env (needs GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_SHEET_ID).');
+  }
   if (!docPromise) {
     const auth = new JWT({
       email: config.google.serviceAccountEmail,

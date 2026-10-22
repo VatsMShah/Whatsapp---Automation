@@ -5,6 +5,7 @@ import { DashboardOverview } from './components/dashboard/DashboardOverview';
 import { BookingsTable } from './components/tables/BookingsTable';
 import { InquiriesDesk } from './components/inquiries/InquiriesDesk';
 import { TeamManager } from './components/team/TeamManager';
+import { BackupManager } from './components/backup/BackupManager';
 import { RoleProvider, useRole } from './context/RoleContext';
 import { dbService, ACTIVE_CLIENT_PROFILE } from './services/supabase';
 import {
@@ -68,7 +69,7 @@ function AppInner() {
 
   // If employee switches to a tab they can't access, reset to orders
   useEffect(() => {
-    if (!isAdmin && (currentTab === 'overview' || currentTab === 'team')) {
+    if (!isAdmin && (currentTab === 'overview' || currentTab === 'team' || currentTab === 'backup')) {
       setCurrentTab('orders');
     }
   }, [isAdmin, currentTab]);
@@ -188,6 +189,11 @@ function AppInner() {
           title: 'Team Management',
           subtitle: 'Manage employees, assign leads, and track team performance',
         };
+      case 'backup':
+        return {
+          title: 'Data Safety Vault & Backup Center',
+          subtitle: 'Multi-tier failover protection, 1-click cloud & spreadsheet archives',
+        };
       default:
         return {
           title: 'Traket Logistics Desk',
@@ -270,6 +276,14 @@ function AppInner() {
               assignments={assignments}
               onSaveEmployee={handleSaveEmployee}
               onDeactivateEmployee={handleDeactivateEmployee}
+            />
+          )}
+
+          {currentTab === 'backup' && isAdmin && (
+            <BackupManager
+              bookings={bookings}
+              sessions={sessions}
+              supportTickets={supportTickets}
             />
           )}
         </main>

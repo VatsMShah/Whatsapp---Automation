@@ -1,6 +1,8 @@
 const { createClient } = require('@supabase/supabase-js');
 const config = require('../config');
 const logger = require('../utils/logger');
+const localBackup = require('./localBackup');
+const sheets = require('./sheets');
 
 let supabase = null;
 
@@ -249,9 +251,18 @@ async function getMasterRowsByPhone(phone) {
 
 /** Save or update master session row */
 async function saveMasterSession(row) {
-  // Always update memory store
+  // 1. Always update memory store
   memoryStore.users_master.set(row.user_id, row);
 
+  // 2. Always persist immediately to local disk vault (offline-safe)
+  localBackup.saveRecord('users_master', row, false);
+
+  // 3. Mirror to Google Sheets in background if configured (non-blocking)
+  sheets.saveMasterSession(row).catch((e) =>
+    logger.warn('Background Sheets sync for master session failed:', e.message)
+  );
+
+  // 4. Try saving to Supabase
   try {
     const client = getClient();
     const dbRow = mapMasterToDB(row);
@@ -263,10 +274,12 @@ async function saveMasterSession(row) {
 
     if (error) throw error;
 
+    // Mark as successfully synced
+    localBackup.markSyncedToSupabase('users_master', row.user_id);
     logger.info('Saved master session in Supabase', { user_id: row.user_id });
     return data && data.length > 0 ? mapMasterToJS(data[0]) : row;
   } catch (err) {
-    logger.warn('Supabase saveMasterSession failed, saved to memory store:', err.message || err);
+    logger.warn('⚠️ Supabase saveMasterSession failed (saved in local backup vault):', err.message || err);
     return row;
   }
 }
@@ -282,17 +295,33 @@ async function getBookVehicleRow(userId) {
       .maybeSingle();
 
     if (error) throw error;
-    return mapBookToJS(data);
+    if (data) return mapBookToJS(data);
   } catch (err) {
-    logger.warn('Supabase getBookVehicleRow failed, using memory fallback:', err.message || err);
-    return memoryStore.book_vehicle.get(userId) || {};
+    logger.warn('Supabase getBookVehicleRow failed, checking local backup:', err.message || err);
   }
+
+  // Check local disk backup first before memory store
+  const localRecords = localBackup.getRecords('book_vehicle');
+  const localRow = localRecords.find((r) => String(r.user_id) === String(userId));
+  if (localRow) return localRow;
+
+  return memoryStore.book_vehicle.get(userId) || {};
 }
 
 /** Save or update BookVehicle row */
 async function saveBookVehicleRow(row) {
+  // 1. Always update memory store
   memoryStore.book_vehicle.set(row.user_id, row);
 
+  // 2. Always persist immediately to local disk vault (ensures zero data loss if Supabase stops)
+  localBackup.saveRecord('book_vehicle', row, false);
+
+  // 3. Mirror to Google Sheets in background if configured (non-blocking)
+  sheets.saveBookVehicleRow(row).catch((e) =>
+    logger.warn('Background Sheets sync for BookVehicle failed:', e.message)
+  );
+
+  // 4. Try saving to Supabase
   try {
     const client = getClient();
     const dbRow = mapBookToDB(row);
@@ -304,10 +333,12 @@ async function saveBookVehicleRow(row) {
 
     if (error) throw error;
 
+    // Mark as successfully synced
+    localBackup.markSyncedToSupabase('book_vehicle', row.user_id);
     logger.info('Saved book vehicle row in Supabase', { user_id: row.user_id });
     return data && data.length > 0 ? mapBookToJS(data[0]) : row;
   } catch (err) {
-    logger.warn('Supabase saveBookVehicleRow failed, saved to memory store:', err.message || err);
+    logger.warn('⚠️ Supabase saveBookVehicleRow failed (saved safely in local disk vault):', err.message || err);
     return row;
   }
 }
@@ -325,7 +356,10 @@ async function getProvideVehicleRow(userId) {
     if (error) throw error;
     return mapProvideToJS(data);
   } catch (err) {
-    logger.warn('Supabase getProvideVehicleRow failed, using memory fallback:', err.message || err);
+    logger.warn('Supabase getProvideVehicleRow failed, using local backup fallback:', err.message || err);
+    const localRecords = localBackup.getRecords('provide_vehicle');
+    const localRow = localRecords.find((r) => String(r.user_id) === String(userId));
+    if (localRow) return localRow;
     return memoryStore.provide_vehicle.get(userId) || {};
   }
 }
@@ -333,6 +367,11 @@ async function getProvideVehicleRow(userId) {
 /** Save or update ProvideVehicle row */
 async function saveProvideVehicleRow(row) {
   memoryStore.provide_vehicle.set(row.user_id, row);
+  localBackup.saveRecord('provide_vehicle', row, false);
+
+  sheets.saveProvideVehicleRow(row).catch((e) =>
+    logger.warn('Background Sheets sync for ProvideVehicle failed:', e.message)
+  );
 
   try {
     const client = getClient();
@@ -345,10 +384,11 @@ async function saveProvideVehicleRow(row) {
 
     if (error) throw error;
 
+    localBackup.markSyncedToSupabase('provide_vehicle', row.user_id);
     logger.info('Saved provide vehicle row in Supabase', { user_id: row.user_id });
     return data && data.length > 0 ? mapProvideToJS(data[0]) : row;
   } catch (err) {
-    logger.warn('Supabase saveProvideVehicleRow failed, saved to memory store:', err.message || err);
+    logger.warn('⚠️ Supabase saveProvideVehicleRow failed, saved to local backup:', err.message || err);
     return row;
   }
 }
@@ -366,7 +406,10 @@ async function getSupportRow(userId) {
     if (error) throw error;
     return mapSupportToJS(data);
   } catch (err) {
-    logger.warn('Supabase getSupportRow failed, using memory fallback:', err.message || err);
+    logger.warn('Supabase getSupportRow failed, using local backup fallback:', err.message || err);
+    const localRecords = localBackup.getRecords('support');
+    const localRow = localRecords.find((r) => String(r.user_id) === String(userId));
+    if (localRow) return localRow;
     return memoryStore.support.get(userId) || {};
   }
 }
@@ -374,6 +417,11 @@ async function getSupportRow(userId) {
 /** Save or update Support row */
 async function saveSupportRow(row) {
   memoryStore.support.set(row.user_id, row);
+  localBackup.saveRecord('support', row, false);
+
+  sheets.saveSupportRow(row).catch((e) =>
+    logger.warn('Background Sheets sync for support failed:', e.message)
+  );
 
   try {
     const client = getClient();
@@ -386,15 +434,51 @@ async function saveSupportRow(row) {
 
     if (error) throw error;
 
+    localBackup.markSyncedToSupabase('support', row.user_id);
     logger.info('Saved support row in Supabase', { user_id: row.user_id });
     return data && data.length > 0 ? mapSupportToDB(data[0]) : row;
   } catch (err) {
-    logger.warn('Supabase saveSupportRow failed, saved to memory store:', err.message || err);
+    logger.warn('⚠️ Supabase saveSupportRow failed, saved to local backup:', err.message || err);
     return row;
   }
 }
 
+/**
+ * Re-sync any offline leads from local disk vault into Supabase
+ * (Used when Supabase is restored or unpaused)
+ */
+async function resyncPendingToSupabase() {
+  const pending = localBackup.getPendingSupabaseRecords('book_vehicle');
+  if (pending.length === 0) {
+    return { success: true, count: 0, message: 'All local leads are already synced with Supabase.' };
+  }
+
+  let synced = 0;
+  const client = getClient();
+
+  for (const record of pending) {
+    try {
+      const dbRow = mapBookToDB(record);
+      const { error } = await client.from('book_vehicle').upsert(dbRow);
+      if (!error) {
+        localBackup.markSyncedToSupabase('book_vehicle', record.user_id);
+        synced++;
+      }
+    } catch (e) {
+      logger.warn(`Failed to resync record ${record.user_id} to Supabase:`, e.message);
+    }
+  }
+
+  return {
+    success: true,
+    count: synced,
+    totalPending: pending.length,
+    message: `Successfully re-synced ${synced} out of ${pending.length} leads to Supabase.`,
+  };
+}
+
 module.exports = {
+  getClient,
   getMasterRowsByPhone,
   saveMasterSession,
   getBookVehicleRow,
@@ -403,4 +487,5 @@ module.exports = {
   saveProvideVehicleRow,
   getSupportRow,
   saveSupportRow,
+  resyncPendingToSupabase,
 };

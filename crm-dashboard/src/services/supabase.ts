@@ -6,6 +6,7 @@ import {
   ClientCompanyProfile,
   Employee,
   LeadAssignment,
+  BackupStats,
 } from '../types';
 import { resolvePinCode, estimateDistanceKm } from '../utils/pinResolver';
 
@@ -25,9 +26,30 @@ export const ACTIVE_CLIENT_PROFILE: ClientCompanyProfile = {
 
 class SupabaseDataService {
   private client: any;
+  public isOfflineMode: boolean = false;
+  public lastSyncTime: string = new Date().toISOString();
 
   constructor() {
     this.client = createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+
+  // --- LOCAL OFFLINE CACHE HELPERS ---
+  private setCache(key: string, data: any) {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+      localStorage.setItem(`${key}_timestamp`, new Date().toISOString());
+    } catch {
+      // quota or private browsing
+    }
+  }
+
+  private getCache<T>(key: string): T | null {
+    try {
+      const stored = localStorage.getItem(key);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
   }
 
   // Cache helper for lead status so UI is immediately responsive
@@ -68,9 +90,15 @@ class SupabaseDataService {
       ]);
 
       if (bookingsRes.error || !bookingsRes.data) {
-        console.warn('Supabase getBookings returned error or empty:', bookingsRes.error);
+        console.warn('⚠️ Supabase getBookings unreachable or paused. Falling back to local offline backup cache.');
+        this.isOfflineMode = true;
+        const cached = this.getCache<FreightBooking[]>('traket_cached_bookings');
+        if (cached && cached.length > 0) return cached;
         return [];
       }
+
+      this.isOfflineMode = false;
+      this.lastSyncTime = new Date().toISOString();
 
       // Map statuses from lead_status table
       const statusMap = new Map<string, { status: FreightBooking['status']; remarks?: string }>();
@@ -95,15 +123,21 @@ class SupabaseDataService {
         return hasRoute && isCompleted;
       });
 
-      return validCompletedOrders.map((d: any) => {
+      const processed = validCompletedOrders.map((d: any) => {
         const dbStatus = statusMap.get(d.user_id);
         const localStatus = localMap[d.user_id];
         const statusEntry = dbStatus || localStatus;
         return this.enhanceBooking(d, statusEntry);
       });
+
+      // Save offline snapshot to local cache
+      this.setCache('traket_cached_bookings', processed);
+      return processed;
     } catch (err) {
-      console.error('Error fetching bookings from Supabase:', err);
-      return [];
+      console.warn('Network error reaching Supabase, using offline backup cache:', err);
+      this.isOfflineMode = true;
+      const cached = this.getCache<FreightBooking[]>('traket_cached_bookings');
+      return cached || [];
     }
   }
 
@@ -406,6 +440,138 @@ class SupabaseDataService {
       );
     } catch {}
     return true;
+  }
+
+  // --- BACKUP & FAILOVER DATA METHODS ---
+  async getBackupStats(): Promise<BackupStats> {
+    try {
+      const res = await fetch('http://localhost:3000/api/backup/status');
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch {
+      // Local server not reachable or running standalone
+    }
+
+    // Build fallback stats using client-side cache & Supabase status
+    const cachedBookings = this.getCache<any[]>('traket_cached_bookings') || [];
+    const cachedSessions = this.getCache<any[]>('traket_cached_sessions') || [];
+    const cachedSupport = this.getCache<any[]>('traket_cached_support') || [];
+
+    return {
+      status: 'active',
+      lastBackupAt: this.lastSyncTime || new Date().toISOString(),
+      counts: {
+        book_vehicle: cachedBookings.length,
+        users_master: cachedSessions.length,
+        provide_vehicle: 0,
+        support: cachedSupport.length,
+        total: cachedBookings.length + cachedSessions.length + cachedSupport.length,
+      },
+      pendingSupabaseSync: this.isOfflineMode ? cachedBookings.length : 0,
+      supabase: {
+        online: !this.isOfflineMode,
+        error: this.isOfflineMode ? 'Supabase connection paused or unreachable' : undefined,
+      },
+      googleSheets: {
+        configured: false,
+        sheetId: null,
+      },
+    };
+  }
+
+  async triggerResyncSupabase(): Promise<{ success: boolean; count: number; message: string }> {
+    try {
+      const res = await fetch('http://localhost:3000/api/backup/resync-supabase', { method: 'POST' });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e: any) {
+      return { success: false, count: 0, message: 'Could not reach backend re-sync server.' };
+    }
+    return { success: false, count: 0, message: 'Re-sync request failed.' };
+  }
+
+  async triggerSheetsSync(): Promise<{ success: boolean; count: number; message?: string }> {
+    try {
+      const res = await fetch('http://localhost:3000/api/backup/sync-sheets', { method: 'POST' });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e: any) {
+      return { success: false, count: 0, message: 'Backend server unavailable.' };
+    }
+    return { success: false, count: 0, message: 'Sheets sync failed.' };
+  }
+
+  exportBookingsCSV(bookings: FreightBooking[]) {
+    if (!bookings || bookings.length === 0) return;
+    const headers = [
+      'user_id',
+      'phone',
+      'status',
+      'origin',
+      'originCity',
+      'destination',
+      'destinationCity',
+      'distanceKm',
+      'cargo_type',
+      'vehicle_or_container',
+      'material_or_line',
+      'weight',
+      'loading_date',
+      'time_slot',
+      'company_name',
+      'contact_name',
+      'email',
+      'remarks',
+      'updated_at',
+    ];
+
+    const escape = (val: any) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+    const rows = bookings.map((b) =>
+      [
+        escape(b.user_id),
+        escape(b.phone),
+        escape(b.status),
+        escape(b.origin),
+        escape(b.originCity),
+        escape(b.destination),
+        escape(b.destinationCity),
+        escape(b.estimatedDistanceKm || ''),
+        escape(b.cargo_type),
+        escape(b.vehicle_or_container),
+        escape(b.material_or_line),
+        escape(b.weight),
+        escape(b.loading_date),
+        escape(b.time_slot),
+        escape(b.company_name),
+        escape(b.contact_name),
+        escape(b.email),
+        escape(b.remarks),
+        escape(b.updated_at),
+      ].join(',')
+    );
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `traket_bookings_backup_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  exportAllJSON(data: { bookings: FreightBooking[]; sessions: SessionRecord[]; support: SupportTicket[] }) {
+    const jsonStr = JSON.stringify({ ...data, exportedAt: new Date().toISOString() }, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `traket_full_system_vault_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 }
 

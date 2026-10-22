@@ -26,4 +26,20 @@ module.exports = {
     url: required('SUPABASE_URL'),
     key: required('SUPABASE_KEY'),
   },
+  google: {
+    serviceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
+    privateKey: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    sheetId: process.env.GOOGLE_SHEET_ID || '',
+    tabs: {
+      master: process.env.GOOGLE_TAB_MASTER || 'users_master',
+      book: process.env.GOOGLE_TAB_BOOK || 'BookVehicle',
+      provider: process.env.GOOGLE_TAB_PROVIDER || 'ProvideVehicle',
+      support: process.env.GOOGLE_TAB_SUPPORT || 'Support',
+    },
+    isConfigured: Boolean(
+      process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
+      process.env.GOOGLE_PRIVATE_KEY &&
+      process.env.GOOGLE_SHEET_ID
+    ),
+  },
 };
