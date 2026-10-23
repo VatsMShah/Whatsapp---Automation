@@ -8,7 +8,6 @@ import {
   Users,
   ShieldCheck,
   UserCircle,
-  Database,
 } from 'lucide-react';
 import { ClientCompanyProfile, DashboardTab } from '../../types';
 import { UserRole } from '../../context/RoleContext';
@@ -60,12 +59,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'team',
       label: 'Team Management',
       icon: Users,
-      adminOnly: true,
-    },
-    {
-      id: 'backup',
-      label: 'Data Safety & Backup',
-      icon: Database,
       adminOnly: true,
     },
   ];
