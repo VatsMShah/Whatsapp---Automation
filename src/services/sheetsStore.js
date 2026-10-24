@@ -7,12 +7,12 @@ let docPromise = null;
 
 /**
  * Lazily authenticates and loads the spreadsheet once, then reuses it.
- * (google-spreadsheet caches sheet metadata on the instance, so we don't
- * want to re-create this on every webhook call.)
  */
 function getDoc() {
   if (!config.google?.isConfigured) {
-    throw new Error('Google Sheets is not configured in .env (needs GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_SHEET_ID).');
+    throw new Error(
+      'Google Sheets is not configured in .env. Please provide either GOOGLE_SHEET_WEBHOOK_URL or GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY.'
+    );
   }
   if (!docPromise) {
     const auth = new JWT({
@@ -27,54 +27,118 @@ function getDoc() {
   return docPromise;
 }
 
-async function getSheet(tabTitle) {
+/**
+ * Gets sheet tab, or automatically creates it with headers if it does not exist
+ */
+async function getSheet(tabTitle, defaultHeaders = []) {
   const doc = await getDoc();
-  const sheet = doc.sheetsByTitle[tabTitle];
+  let sheet = doc.sheetsByTitle[tabTitle];
+
   if (!sheet) {
-    throw new Error(
-      `Sheet tab "${tabTitle}" not found. Check the tab name matches exactly ` +
-      `(case-sensitive) and that the service account has access to the spreadsheet.`
-    );
+    // If the default sheet is 'Sheet1' and unused, rename it
+    if (doc.sheetCount === 1 && doc.sheetsByIndex[0]?.title === 'Sheet1') {
+      sheet = doc.sheetsByIndex[0];
+      await sheet.updateProperties({ title: tabTitle });
+      if (defaultHeaders.length > 0) {
+        await sheet.setHeaderRow(defaultHeaders);
+      }
+      logger.info(`Renamed initial Sheet1 to "${tabTitle}" with headers.`);
+    } else {
+      // Add a new tab
+      sheet = await doc.addSheet({ title: tabTitle, headerValues: defaultHeaders });
+      logger.info(`Created new sheet tab "${tabTitle}".`);
+    }
   }
+
   return sheet;
 }
 
 /**
- * Equivalent of an n8n Google Sheets "Get Rows" node with a filter —
- * returns all rows where `column` equals `value` (as strings, matching
- * how n8n's Sheets node compares filter values).
+ * Filter rows where column equals value
  */
 async function findRows(tabTitle, column, value) {
-  const sheet = await getSheet(tabTitle);
-  await sheet.loadHeaderRow();
-  const rows = await sheet.getRows();
-  return rows.filter((r) => String(r.get(column) ?? '') === String(value ?? ''));
+  if (config.google?.webhookUrl) {
+    // Webhook mode: rows handled by Google Apps Script
+    return [];
+  }
+
+  const sheet = await getSheet(tabTitle, [column]);
+  try {
+    await sheet.loadHeaderRow();
+    const rows = await sheet.getRows();
+    return rows.filter((r) => String(r.get(column) ?? '') === String(value ?? ''));
+  } catch (err) {
+    logger.warn(`Could not load header row for ${tabTitle}:`, err.message);
+    return [];
+  }
 }
 
 /**
- * Equivalent of an n8n Google Sheets "Append or Update Row" node —
- * finds the row where `matchColumn` equals `data[matchColumn]`; updates it
- * if found, otherwise appends a new row. Returns the plain-object result.
+ * Append or update a row in Google Sheet
  */
 async function upsertRow(tabTitle, matchColumn, data) {
-  const sheet = await getSheet(tabTitle);
-  await sheet.loadHeaderRow();
-  const rows = await sheet.getRows();
+  // Option 1: Fast Webhook Sync (via Google Apps Script)
+  if (config.google?.webhookUrl) {
+    try {
+      await fetch(config.google.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'upsert',
+          tabTitle,
+          matchColumn,
+          data,
+          sheetId: config.google.sheetId,
+        }),
+      });
+      logger.info(`✅ Auto-synced row to Google Sheet (via Webhook) in "${tabTitle}"`, { [matchColumn]: data[matchColumn] });
+      return data;
+    } catch (webhookErr) {
+      logger.warn('Google Sheet Webhook sync failed:', webhookErr.message);
+      return data;
+    }
+  }
 
+  // Option 2: Direct Google Sheets API (via Service Account)
+  const headers = Object.keys(data).filter((k) => typeof data[k] !== 'function');
+  const sheet = await getSheet(tabTitle, headers);
+
+  let headerValues = [];
+  try {
+    await sheet.loadHeaderRow();
+    headerValues = sheet.headerValues || [];
+  } catch {
+    await sheet.setHeaderRow(headers);
+    headerValues = headers;
+  }
+
+  // Ensure any new columns are added to header row
+  const missingHeaders = headers.filter((h) => !headerValues.includes(h));
+  if (missingHeaders.length > 0) {
+    const updatedHeaders = [...headerValues, ...missingHeaders];
+    await sheet.setHeaderRow(updatedHeaders);
+  }
+
+  const rows = await sheet.getRows();
   const matchValue = String(data[matchColumn] ?? '');
   const existing = rows.find((r) => String(r.get(matchColumn) ?? '') === matchValue);
 
   if (existing) {
     for (const [key, value] of Object.entries(data)) {
-      existing.set(key, value === undefined || value === null ? '' : value);
+      existing.set(key, value === undefined || value === null ? '' : typeof value === 'object' ? JSON.stringify(value) : value);
     }
     await existing.save();
-    logger.info(`Updated row in "${tabTitle}"`, { [matchColumn]: matchValue });
+    logger.info(`✅ Updated row in Google Sheet "${tabTitle}"`, { [matchColumn]: matchValue });
     return existing.toObject();
   }
 
-  const newRow = await sheet.addRow(data);
-  logger.info(`Appended row in "${tabTitle}"`, { [matchColumn]: matchValue });
+  const cleanData = {};
+  for (const [k, v] of Object.entries(data)) {
+    cleanData[k] = v === undefined || v === null ? '' : typeof v === 'object' ? JSON.stringify(v) : v;
+  }
+
+  const newRow = await sheet.addRow(cleanData);
+  logger.info(`✅ Appended row in Google Sheet "${tabTitle}"`, { [matchColumn]: matchValue });
   return newRow.toObject();
 }
 

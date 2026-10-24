@@ -65,7 +65,25 @@ async function getBookVehicleRow(userId) {
 async function saveBookVehicleRow(row) {
   if (!isConfigured()) return row;
   try {
-    return await store.upsertRow(TABS.book, 'user_id', row);
+    const formattedRow = {
+      user_id: row.user_id,
+      phone: row.phone || '',
+      loadingDate: row.loadingDate || row.loading_date || '',
+      loadingTime: row.loadingTime || row.time_slot || '',
+      origin: row.origin || row.loadingYard || row.stuffingAddress || row.loadingPin || '',
+      destination: row.destination || row.unloadingAddress || row.portCfs || row.unloadingPin || '',
+      cargoType: row.cargoType || row.cargo_type || '',
+      vehicleType: row.vehicleType || row.vehicle_or_container || '',
+      vehicleSubType: row.vehicleSubType || '',
+      weight: row.weight || '',
+      material: row.material || row.shippingLine || row.material_or_line || '',
+      company: row.company || row.company_name || '',
+      contactName: row.contactName || row.contact_name || '',
+      email: row.email || '',
+      remarks: row.remarks || '',
+      updated_at: row.updated_at || new Date().toISOString(),
+    };
+    return await store.upsertRow(TABS.book, 'user_id', formattedRow);
   } catch (err) {
     logger.warn('Google Sheets saveBookVehicleRow failed:', err.message);
     return row;
