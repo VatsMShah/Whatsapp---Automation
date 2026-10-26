@@ -62,6 +62,8 @@ export interface Employee {
   email?: string;
   phone?: string;
   department?: string;
+  password?: string;
+  role?: 'admin' | 'employee';
   is_active: boolean;
   created_at: string;
 }

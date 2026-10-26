@@ -340,16 +340,23 @@ class SupabaseDataService {
   getLocalEmployees(): Employee[] {
     try {
       const stored = localStorage.getItem('traket_employees');
-      if (stored) return JSON.parse(stored) as Employee[];
+      if (stored) {
+        const parsed = JSON.parse(stored) as Employee[];
+        // Filter out old dummy seed entries if present
+        const dummyEmails = ['preet@traket.in', 'vatsal@traket.in', 'anil@traket.in'];
+        const dummyNames = ['preet karani', 'vatsal shah', 'anil kumar'];
+        const cleaned = parsed.filter(
+          (e) =>
+            !dummyEmails.includes(e.email?.toLowerCase().trim() || '') &&
+            !dummyNames.includes(e.name?.toLowerCase().trim() || '')
+        );
+        if (cleaned.length !== parsed.length) {
+          localStorage.setItem('traket_employees', JSON.stringify(cleaned));
+        }
+        return cleaned;
+      }
     } catch {}
-    // Seed with defaults if nothing stored
-    const defaults: Employee[] = [
-      { id: '1', employee_id: 'EMP001', name: 'Preet Karani', email: 'preet@traket.in', phone: '', department: 'Sales', is_active: true, created_at: new Date().toISOString() },
-      { id: '2', employee_id: 'EMP002', name: 'Vatsal Shah', email: 'vatsal@traket.in', phone: '', department: 'Ops', is_active: true, created_at: new Date().toISOString() },
-      { id: '3', employee_id: 'EMP003', name: 'Anil Kumar', email: 'anil@traket.in', phone: '', department: 'Sales', is_active: true, created_at: new Date().toISOString() },
-    ];
-    localStorage.setItem('traket_employees', JSON.stringify(defaults));
-    return defaults;
+    return [];
   }
 
   async upsertEmployee(emp: Omit<Employee, 'id' | 'created_at'>): Promise<Employee | null> {

@@ -21,7 +21,20 @@ export const RoleProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentEmployee, setCurrentEmployeeState] = useState<Employee | null>(() => {
     try {
       const stored = localStorage.getItem('traket_current_employee');
-      return stored ? JSON.parse(stored) : null;
+      if (stored) {
+        const parsed = JSON.parse(stored) as Employee;
+        const dummyNames = ['preet karani', 'vatsal shah', 'anil kumar'];
+        const dummyEmails = ['preet@traket.in', 'vatsal@traket.in', 'anil@traket.in'];
+        if (
+          dummyEmails.includes(parsed.email?.toLowerCase().trim() || '') ||
+          dummyNames.includes(parsed.name?.toLowerCase().trim() || '')
+        ) {
+          localStorage.removeItem('traket_current_employee');
+          return null;
+        }
+        return parsed;
+      }
+      return null;
     } catch {
       return null;
     }
