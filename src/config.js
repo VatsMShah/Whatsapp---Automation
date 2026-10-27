@@ -33,9 +33,10 @@ module.exports = {
     privateKey: (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
     tabs: {
       master: process.env.GOOGLE_TAB_MASTER || 'users_master',
-      book: process.env.GOOGLE_TAB_BOOK || 'BookVehicle',
-      provider: process.env.GOOGLE_TAB_PROVIDER || 'ProvideVehicle',
-      support: process.env.GOOGLE_TAB_SUPPORT || 'Support',
+      book: process.env.GOOGLE_TAB_BOOK || 'book_vehicle',
+      provider: process.env.GOOGLE_TAB_PROVIDER || 'provide_vehicle',
+      support: process.env.GOOGLE_TAB_SUPPORT || 'support',
+      leadStatus: process.env.GOOGLE_TAB_LEAD_STATUS || 'lead_status',
     },
     isConfigured: Boolean(
       process.env.GOOGLE_SHEET_WEBHOOK_URL ||

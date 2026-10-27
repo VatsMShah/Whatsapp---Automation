@@ -33,14 +33,15 @@ async function getMasterRowsByPhone(phone) {
 async function saveMasterSession(row) {
   if (!isConfigured()) return row;
   try {
-    return await store.upsertRow(TABS.master, 'user_id', {
+    const formatted = {
       user_id: row.user_id,
-      state: row.state,
-      updated_at: row.updated_at,
-      flowType: row.flowType,
-      phone: row.phone,
-      data: row.data,
-    });
+      phone: row.phone || '',
+      state: row.state || '',
+      flow_type: row.flowType || row.flow_type || '',
+      session_data: typeof row.data === 'object' ? JSON.stringify(row.data) : (row.data || '{}'),
+      updated_at: row.updated_at || new Date().toISOString(),
+    };
+    return await store.upsertRow(TABS.master, 'user_id', formatted);
   } catch (err) {
     logger.warn('Google Sheets saveMasterSession failed:', err.message);
     return row;
@@ -108,7 +109,22 @@ async function getProvideVehicleRow(userId) {
 async function saveProvideVehicleRow(row) {
   if (!isConfigured()) return row;
   try {
-    return await store.upsertRow(TABS.provider, 'user_id', row);
+    const formatted = {
+      user_id: row.user_id,
+      driver_phone: row.driver_phone || row.driverPhone || row.phone || '',
+      driver_name: row.driver_name || row.driverName || '',
+      vehicle_type: row.vehicle_type || row.vehicleType || '',
+      vehicle_number: row.vehicle_number || row.vehicleNumber || '',
+      capacity: row.capacity || '',
+      route_preference: row.route_preference || row.routePreference || '',
+      availability: row.availability || '',
+      current_location: row.current_location || row.currentLocation || '',
+      notes: row.notes || '',
+      documents: row.documents || '',
+      state: row.state || '',
+      updated_at: row.updated_at || new Date().toISOString(),
+    };
+    return await store.upsertRow(TABS.provider, 'user_id', formatted);
   } catch (err) {
     logger.warn('Google Sheets saveProvideVehicleRow failed:', err.message);
     return row;
@@ -133,10 +149,52 @@ async function getSupportRow(userId) {
 async function saveSupportRow(row) {
   if (!isConfigured()) return row;
   try {
-    return await store.upsertRow(TABS.support, 'user_id', row);
+    const formatted = {
+      user_id: row.user_id,
+      phone: row.phone || '',
+      query: row.query || '',
+      status: row.status || 'open',
+      notes: row.notes || '',
+      updated_at: row.updated_at || new Date().toISOString(),
+    };
+    return await store.upsertRow(TABS.support, 'user_id', formatted);
   } catch (err) {
     logger.warn('Google Sheets saveSupportRow failed:', err.message);
     return row;
+  }
+}
+
+// ---------------------------------------------------------------------
+// LeadStatus  (CRM Lead Tracking & Follow-ups)
+// ---------------------------------------------------------------------
+
+async function saveLeadStatusRow(row) {
+  if (!isConfigured()) return row;
+  try {
+    const formatted = {
+      user_id: row.user_id,
+      phone: row.phone || '',
+      name: row.name || '',
+      status: row.status || 'new',
+      remarks: row.remarks || '',
+      updated_at: row.updated_at || new Date().toISOString(),
+    };
+    return await store.upsertRow(TABS.leadStatus, 'user_id', formatted);
+  } catch (err) {
+    logger.warn('Google Sheets saveLeadStatusRow failed:', err.message);
+    return row;
+  }
+}
+
+/**
+ * Initialize a tab with default headers if it's currently empty
+ */
+async function initTabWithHeaders(tabTitle, sampleData) {
+  if (!isConfigured()) return;
+  try {
+    await store.upsertRow(tabTitle, 'user_id', sampleData);
+  } catch (err) {
+    logger.warn(`Failed to init tab ${tabTitle}:`, err.message);
   }
 }
 
@@ -145,7 +203,7 @@ async function saveSupportRow(row) {
  */
 async function syncAllBookingsToSheets(bookings) {
   if (!isConfigured()) {
-    throw new Error('Google Sheets is not configured. Please add GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_SHEET_ID in .env');
+    throw new Error('Google Sheets is not configured.');
   }
   let count = 0;
   for (const b of bookings) {
@@ -169,5 +227,7 @@ module.exports = {
   saveProvideVehicleRow,
   getSupportRow,
   saveSupportRow,
+  saveLeadStatusRow,
+  initTabWithHeaders,
   syncAllBookingsToSheets,
 };
