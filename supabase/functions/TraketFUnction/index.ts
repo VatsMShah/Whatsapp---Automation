@@ -2516,6 +2516,8 @@ serve(async (req: Request) => {
               }
               if (parsedData.alternatePhone && !remarks.includes(parsedData.alternatePhone)) {
                 remarks = remarks ? `Alt Phone: ${parsedData.alternatePhone} | ${remarks}` : `Alt Phone: ${parsedData.alternatePhone}`;
+              }
+
               // Only save to book_vehicle if order is completed (state === 'cta_menu')
               // Incomplete/half-chats remain in users_master (Live Bot Sessions)
               if (output.state === "cta_menu") {
