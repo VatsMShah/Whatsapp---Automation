@@ -270,9 +270,6 @@ function AppInner() {
               assignments={assignments}
               onAssignLead={handleAssignLead}
               onTransferLead={handleTransferLead}
-              isAutoLeadEnabled={isAutoLeadEnabled}
-              onToggleAutoLead={handleToggleAutoLead}
-              onTriggerAutoAssign={handleTriggerAutoAssign}
             />
           )}
 

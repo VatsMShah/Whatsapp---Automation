@@ -16,9 +16,6 @@ import {
   UserCheck,
   ArrowRightLeft,
   Users,
-  Zap,
-  PauseCircle,
-  PlayCircle,
 } from 'lucide-react';
 import { FreightBooking, Employee, LeadAssignment } from '../../types';
 import { UserRole } from '../../context/RoleContext';
@@ -34,9 +31,6 @@ interface BookingsTableProps {
   assignments?: Record<string, LeadAssignment>;
   onAssignLead?: (userId: string, employeeId: string) => Promise<void>;
   onTransferLead?: (userId: string, newEmployeeId: string, note: string) => Promise<void>;
-  isAutoLeadEnabled?: boolean;
-  onToggleAutoLead?: (enabled: boolean) => void;
-  onTriggerAutoAssign?: () => Promise<void>;
 }
 
 
@@ -50,9 +44,6 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
   assignments = {},
   onAssignLead,
   onTransferLead,
-  isAutoLeadEnabled = true,
-  onToggleAutoLead,
-  onTriggerAutoAssign,
 }) => {
   const isAdmin = role === 'admin';
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -61,7 +52,6 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
   const [selectedBooking, setSelectedBooking] = useState<FreightBooking | null>(null);
   const [remarksInput, setRemarksInput] = useState<string>('');
   const [isSavingRemarks, setIsSavingRemarks] = useState(false);
-  const [isTriggeringAuto, setIsTriggeringAuto] = useState(false);
 
   // Transfer modal state
   const [transferBooking, setTransferBooking] = useState<FreightBooking | null>(null);
@@ -237,70 +227,6 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Auto-Assignment Status Banner / Quick Control */}
-      {isAdmin && (
-        <div className="p-3 bg-white rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 shadow-xs text-xs">
-          <div className="flex items-center space-x-2">
-            <span
-              className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
-                isAutoLeadEnabled
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                  : 'bg-amber-50 text-amber-800 border-amber-300'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${isAutoLeadEnabled ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-              <span>{isAutoLeadEnabled ? 'Vehicle Auto-Assign: ACTIVE' : 'Vehicle Auto-Assign: PAUSED (Manual Mode)'}</span>
-            </span>
-
-            <span className="text-[11px] text-slate-500 hidden sm:inline">
-              {isAutoLeadEnabled
-                ? 'Incoming WhatsApp leads route strictly based on vehicle type (Truck, Tempo, Domestic Container, FCL 40 HC/HCL, 20 GP, 40 GP, Trailer).'
-                : 'Leads remain unassigned until manually assigned.'}
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            {onToggleAutoLead && (
-              <button
-                onClick={() => onToggleAutoLead(!isAutoLeadEnabled)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition flex items-center space-x-1.5 ${
-                  isAutoLeadEnabled
-                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-                    : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-xs'
-                }`}
-              >
-                {isAutoLeadEnabled ? (
-                  <>
-                    <PauseCircle className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Pause (Manual Mode)</span>
-                  </>
-                ) : (
-                  <>
-                    <PlayCircle className="w-3.5 h-3.5 text-white" />
-                    <span>Resume Auto-Assign</span>
-                  </>
-                )}
-              </button>
-            )}
-
-            {onTriggerAutoAssign && isAutoLeadEnabled && (
-              <button
-                onClick={async () => {
-                  setIsTriggeringAuto(true);
-                  await onTriggerAutoAssign();
-                  setIsTriggeringAuto(false);
-                }}
-                disabled={isTriggeringAuto}
-                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition flex items-center space-x-1 shadow-xs disabled:opacity-50"
-              >
-                <Zap className="w-3.5 h-3.5 text-amber-300" />
-                <span>{isTriggeringAuto ? 'Assigning...' : 'Auto-Assign Pending'}</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Filters & Control Bar */}
       <div className="p-4 rounded-xl bg-white border border-slate-200 flex flex-wrap items-center justify-between gap-3 shadow-sm">
         {/* Status Filters */}
