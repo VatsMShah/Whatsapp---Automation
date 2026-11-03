@@ -34,6 +34,9 @@ function AppInner() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isAutoLeadEnabled, setIsAutoLeadEnabled] = useState<boolean>(() =>
+    dbService.isAutoLeadAssignmentEnabled()
+  );
 
   // Fetch real data from Supabase
   const loadData = async () => {
@@ -49,8 +52,17 @@ function AppInner() {
       setSessions(s || []);
       setSupportTickets(t || []);
       setEmployees(emps || []);
+
+      let currentAssignments = dbService.getLocalAssignments();
+
+      // If vehicle auto-lead assignment is enabled, auto-assign unassigned leads based on vehicle type
+      if (b && b.length > 0 && emps && emps.length > 0 && dbService.isAutoLeadAssignmentEnabled()) {
+        const autoRes = await dbService.autoAssignBookingsByVehicle(b, emps, currentAssignments);
+        currentAssignments = autoRes.updatedAssignments;
+      }
+
       // Load assignments from local cache (also synced to Supabase)
-      setAssignments(dbService.getLocalAssignments());
+      setAssignments(currentAssignments);
     } catch (err) {
       console.error('Failed to load Supabase data:', err);
     } finally {
@@ -106,13 +118,28 @@ function AppInner() {
   };
 
   const handleAssignLead = async (userId: string, employeeId: string) => {
-    await dbService.assignLead(userId, employeeId);
+    if (!employeeId) {
+      await dbService.unassignLead(userId);
+    } else {
+      await dbService.assignLead(userId, employeeId);
+    }
     setAssignments(dbService.getLocalAssignments());
   };
 
   const handleTransferLead = async (userId: string, newEmployeeId: string, note: string) => {
     await dbService.transferLead(userId, newEmployeeId, note);
     setAssignments(dbService.getLocalAssignments());
+  };
+
+  const handleToggleAutoLead = (enabled: boolean) => {
+    dbService.setAutoLeadAssignmentEnabled(enabled);
+    setIsAutoLeadEnabled(enabled);
+  };
+
+  const handleTriggerAutoAssign = async () => {
+    if (bookings.length === 0 || employees.length === 0) return;
+    const res = await dbService.autoAssignBookingsByVehicle(bookings, employees, assignments);
+    setAssignments(res.updatedAssignments);
   };
 
   const handleSaveEmployee = async (emp: Omit<Employee, 'id' | 'created_at'>) => {
@@ -243,6 +270,9 @@ function AppInner() {
               assignments={assignments}
               onAssignLead={handleAssignLead}
               onTransferLead={handleTransferLead}
+              isAutoLeadEnabled={isAutoLeadEnabled}
+              onToggleAutoLead={handleToggleAutoLead}
+              onTriggerAutoAssign={handleTriggerAutoAssign}
             />
           )}
 
@@ -271,6 +301,9 @@ function AppInner() {
               assignments={assignments}
               onSaveEmployee={handleSaveEmployee}
               onDeactivateEmployee={handleDeactivateEmployee}
+              isAutoAssignEnabled={isAutoLeadEnabled}
+              onToggleAutoAssign={handleToggleAutoLead}
+              onTriggerAutoAssign={handleTriggerAutoAssign}
             />
           )}
         </main>

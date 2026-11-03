@@ -37,3 +37,8 @@ ADD COLUMN IF NOT EXISTS assigned_to TEXT,
 ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMPTZ,
 ADD COLUMN IF NOT EXISTS transferred_from TEXT,
 ADD COLUMN IF NOT EXISTS transfer_note TEXT;
+
+-- Ensure employees table has assigned_vehicles array
+ALTER TABLE public.employees
+ADD COLUMN IF NOT EXISTS assigned_vehicles TEXT[] DEFAULT '{}';
+

@@ -8,6 +8,7 @@ import {
   LeadAssignment,
   SessionAssignment,
   SessionReminderLog,
+  TraketVehicleType,
 } from '../types';
 import { resolvePinCode, estimateDistanceKm } from '../utils/pinResolver';
 
@@ -24,6 +25,124 @@ export const ACTIVE_CLIENT_PROFILE: ClientCompanyProfile = {
   whatsappStatus: 'connected',
   supabaseUrl: SUPABASE_URL,
 };
+
+/**
+ * Categorizes a raw vehicle/container string into standard Traket vehicle categories:
+ * - Truck (16ft, 19ft, 22ft, 24ft, 32ft, 10–40 MT Open/Full Body)
+ * - Tempo (Tata Ace, Bolero, Pickup, 7ft to 17ft LCVs)
+ * - Container (Domestic) (20ft, 24ft, 32ft SXL/MXL Close Body)
+ * - Trailer / ODC (Flatbed, Lowbed, AMW 40 MT, Hydraulic, ODC)
+ * - FCL 40 HC / HCL (40 High Cube Shipping Containers)
+ * - FCL 20 (20 GP) (20ft General Purpose Shipping Containers)
+ * - FCL 40 (40 GP) (40ft General Purpose Shipping Containers)
+ * - Special Containers (Tank / Flexi / FR) (ISO Tank, Flexi, Flat Rack, Reefer)
+ */
+export function categorizeVehicle(vehicleStr?: string, cargoType?: string): TraketVehicleType | 'General' {
+  if (!vehicleStr) return 'General';
+  const v = vehicleStr.toLowerCase();
+  const c = (cargoType || '').toLowerCase();
+
+  // 1. Explicit prefixes / words (most reliable from DB: 'Tempo – ...', 'Truck – ...', 'Container – ...')
+  if (v.startsWith('tempo') || /\btempo\b/.test(v)) {
+    return 'Tempo';
+  }
+
+  // 2. EXIM Special Containers (Tank, Flexi, Flat Rack, Reefer)
+  if (
+    v.includes('tank') ||
+    v.includes('flexi') ||
+    v.includes(' fr') ||
+    v.includes('(40 fr)') ||
+    v.includes('reefer') ||
+    v.includes('flat rack')
+  ) {
+    return 'Special Containers (Tank / Flexi / FR)';
+  }
+
+  // 3. FCL 40 HC / HCL (High Cube Containers)
+  if (
+    v.includes('40 hc') ||
+    v.includes('40hc') ||
+    v.includes('hcl') ||
+    v.includes('high cube') ||
+    (v.includes('40') && v.includes('hc'))
+  ) {
+    return 'FCL 40 HC / HCL';
+  }
+
+  // 4. FCL 20 GP
+  if (v.includes('20 gp') || v.includes('20gp') || (v.includes('fcl 20') && !v.includes('40'))) {
+    return 'FCL 20 (20 GP)';
+  }
+
+  // 5. FCL 40 GP
+  if (v.includes('40 gp') || v.includes('40gp') || (v.includes('fcl 40') && !v.includes('hc') && !v.includes('fr'))) {
+    return 'FCL 40 (40 GP)';
+  }
+
+  // Generic FCL if any remaining
+  if (v.includes('fcl') || c.includes('import') || c.includes('export')) {
+    if (v.includes('40')) return 'FCL 40 HC / HCL';
+    if (v.includes('20')) return 'FCL 20 (20 GP)';
+  }
+
+  // 6. Trailer / ODC
+  if (
+    v.startsWith('trailer') ||
+    v.includes('trailer') ||
+    v.includes('odc') ||
+    v.includes('flatbed') ||
+    v.includes('lowbed') ||
+    v.includes('hydraulic') ||
+    v.includes('amw')
+  ) {
+    return 'Trailer / ODC';
+  }
+
+  // 7. Domestic Container
+  if (
+    v.startsWith('container') ||
+    v.includes('close body') ||
+    v.includes('mxl') ||
+    v.includes('sxl') ||
+    v.includes('container')
+  ) {
+    return 'Container (Domestic)';
+  }
+
+  // 8. Truck
+  if (
+    v.startsWith('truck') ||
+    /\btruck\b/.test(v) ||
+    v.includes('open') ||
+    v.includes('full body') ||
+    v.includes('pona dala') ||
+    v.includes('half /') ||
+    v.includes('12 mt') ||
+    v.includes('30 mt') ||
+    v.includes('35 mt') ||
+    v.includes('40 mt') ||
+    v.includes('24 ft')
+  ) {
+    return 'Truck';
+  }
+
+  // 9. Other Tempo keywords
+  if (
+    v.includes('pickup') ||
+    v.includes('ace') ||
+    v.includes('bolero') ||
+    v.includes('7 ft') ||
+    v.includes('8 ft') ||
+    v.includes('9 ft') ||
+    v.includes('14 ft') ||
+    v.includes('17 ft')
+  ) {
+    return 'Tempo';
+  }
+
+  return 'General';
+}
 
 class SupabaseDataService {
   private client: any;
@@ -331,9 +450,20 @@ class SupabaseDataService {
         .select('*')
         .order('created_at', { ascending: true });
       if (error || !data) return this.getLocalEmployees();
-      // Persist to local cache
-      localStorage.setItem('traket_employees', JSON.stringify(data));
-      return data as Employee[];
+
+      // Merge with local storage for custom fields like assigned_vehicles
+      const localEmps = this.getLocalEmployees();
+      const localMap = new Map(localEmps.map((e) => [e.employee_id, e]));
+      const merged: Employee[] = (data as any[]).map((d) => {
+        const local = localMap.get(d.employee_id);
+        return {
+          ...d,
+          assigned_vehicles: d.assigned_vehicles || local?.assigned_vehicles || [],
+        };
+      });
+
+      localStorage.setItem('traket_employees', JSON.stringify(merged));
+      return merged;
     } catch {
       return this.getLocalEmployees();
     }
@@ -362,26 +492,170 @@ class SupabaseDataService {
   }
 
   async upsertEmployee(emp: Omit<Employee, 'id' | 'created_at'>): Promise<Employee | null> {
+    const all = this.getLocalEmployees();
+    const exists = all.findIndex((e) => e.employee_id === emp.employee_id);
+    const newEmp: Employee = {
+      ...emp,
+      id: emp.employee_id,
+      created_at: new Date().toISOString(),
+      assigned_vehicles: emp.assigned_vehicles || [],
+    };
+    if (exists >= 0) all[exists] = newEmp;
+    else all.push(newEmp);
+    localStorage.setItem('traket_employees', JSON.stringify(all));
+
     try {
-      const payload = { ...emp, updated_at: new Date().toISOString() };
-      const { data, error } = await this.client
+      const payload: any = { ...emp, updated_at: new Date().toISOString() };
+      let { data, error } = await this.client
         .from('employees')
         .upsert(payload, { onConflict: 'employee_id' })
         .select()
         .single();
-      if (error || !data) throw error;
-      // Refresh local cache
-      await this.getEmployees();
-      return data as Employee;
-    } catch {
-      // Fall back to local storage only
-      const all = this.getLocalEmployees();
-      const exists = all.findIndex((e) => e.employee_id === emp.employee_id);
-      const newEmp: Employee = { ...emp, id: emp.employee_id, created_at: new Date().toISOString() };
-      if (exists >= 0) all[exists] = newEmp; else all.push(newEmp);
-      localStorage.setItem('traket_employees', JSON.stringify(all));
-      return newEmp;
+
+      if (error && error.message?.includes('assigned_vehicles')) {
+        const { assigned_vehicles, ...rest } = payload;
+        const retryRes = await this.client
+          .from('employees')
+          .upsert(rest, { onConflict: 'employee_id' })
+          .select()
+          .single();
+        data = retryRes.data;
+        error = retryRes.error;
+      }
+
+      if (data) {
+        return { ...data, assigned_vehicles: emp.assigned_vehicles || [] } as Employee;
+      }
+    } catch (e) {
+      console.warn('Supabase upsertEmployee fallback to local storage:', e);
     }
+    return newEmp;
+  }
+
+  // --- VEHICLE AUTO LEAD ASSIGNMENT ---
+  isAutoLeadAssignmentEnabled(): boolean {
+    try {
+      const val = localStorage.getItem('traket_auto_lead_assignment');
+      return val === null ? true : val === 'true'; // Default is Active
+    } catch {
+      return true;
+    }
+  }
+
+  setAutoLeadAssignmentEnabled(enabled: boolean): void {
+    try {
+      localStorage.setItem('traket_auto_lead_assignment', enabled ? 'true' : 'false');
+    } catch {}
+  }
+
+  async autoAssignBookingsByVehicle(
+    bookings: FreightBooking[],
+    employees: Employee[],
+    currentAssignments: Record<string, LeadAssignment>
+  ): Promise<{ assignedCount: number; updatedAssignments: Record<string, LeadAssignment> }> {
+    if (!this.isAutoLeadAssignmentEnabled()) {
+      return { assignedCount: 0, updatedAssignments: currentAssignments };
+    }
+
+    const activeEmps = employees.filter((e) => e.is_active);
+    const updated = { ...currentAssignments };
+    let assignedCount = 0;
+    let modified = false;
+
+    // Build map of employee ID -> Employee object
+    const empMap = new Map<string, Employee>();
+    employees.forEach((e) => empMap.set(e.employee_id, e));
+
+    // Track active lead counts per employee to balance assignment load
+    const loadMap = new Map<string, number>();
+    activeEmps.forEach((e) => {
+      loadMap.set(e.employee_id, 0);
+    });
+
+    // 1. AUDIT & CLEAN UP MISMATCHED ASSIGNMENTS:
+    // If a lead was auto-assigned (not manually transferred) to an employee who does NOT handle
+    // that specific vehicle category, clear that assignment so non-truck leads are removed from truck-only employees.
+    for (const b of bookings) {
+      const existing = updated[b.user_id];
+      if (existing?.assigned_to) {
+        // If it was manually transferred by admin, respect manual override
+        if (existing.transferred_from || existing.transfer_note?.startsWith('Transferred')) {
+          const count = loadMap.get(existing.assigned_to) || 0;
+          loadMap.set(existing.assigned_to, count + 1);
+          continue;
+        }
+
+        const assignedEmp = empMap.get(existing.assigned_to);
+        const vehicleCat = categorizeVehicle(b.vehicle_or_container, b.cargo_type);
+
+        // Check if assigned employee is active and specialized in this vehicle category
+        const isSpecialist =
+          assignedEmp &&
+          assignedEmp.is_active &&
+          Array.isArray(assignedEmp.assigned_vehicles) &&
+          assignedEmp.assigned_vehicles.includes(vehicleCat as any);
+
+        if (!isSpecialist) {
+          // Employee doesn't handle this vehicle! Clear the mismatched assignment
+          delete updated[b.user_id];
+          modified = true;
+          this.unassignLead(b.user_id).catch(() => {});
+        } else {
+          const count = loadMap.get(existing.assigned_to) || 0;
+          loadMap.set(existing.assigned_to, count + 1);
+        }
+      }
+    }
+
+    if (activeEmps.length === 0) {
+      if (modified) {
+        localStorage.setItem('traket_assignments', JSON.stringify(updated));
+      }
+      return { assignedCount: 0, updatedAssignments: updated };
+    }
+
+    // 2. STRICT VEHICLE ASSIGNMENT:
+    // If a lead is for a vehicle, ONLY assign to employees configured for that specific vehicle.
+    // If no matching employee exists, KEEP IT UNASSIGNED (never fallback to truck employee).
+    for (const b of bookings) {
+      // Skip if already assigned
+      if (updated[b.user_id]?.assigned_to) continue;
+
+      const vehicleCat = categorizeVehicle(b.vehicle_or_container, b.cargo_type);
+
+      // STRICT: Only employees who have explicitly selected this vehicle category
+      const matchingEmps = activeEmps.filter((e) =>
+        Array.isArray(e.assigned_vehicles) && e.assigned_vehicles.includes(vehicleCat as any)
+      );
+
+      // STRICT: If no active employee specializes in this vehicle, LEAVE IT UNASSIGNED!
+      if (matchingEmps.length === 0) {
+        continue;
+      }
+
+      // Pick employee with lowest current workload among valid vehicle specialists
+      matchingEmps.sort((a, b) => (loadMap.get(a.employee_id) || 0) - (loadMap.get(b.employee_id) || 0));
+      const chosenEmp = matchingEmps[0];
+
+      if (chosenEmp) {
+        await this.assignLead(b.user_id, chosenEmp.employee_id);
+        updated[b.user_id] = {
+          user_id: b.user_id,
+          assigned_to: chosenEmp.employee_id,
+          assigned_at: new Date().toISOString(),
+          transfer_note: `Auto-Assigned by Vehicle (${vehicleCat})`,
+        };
+        loadMap.set(chosenEmp.employee_id, (loadMap.get(chosenEmp.employee_id) || 0) + 1);
+        assignedCount++;
+        modified = true;
+      }
+    }
+
+    if (modified) {
+      localStorage.setItem('traket_assignments', JSON.stringify(updated));
+    }
+
+    return { assignedCount, updatedAssignments: updated };
   }
 
   async deactivateEmployee(employeeId: string): Promise<boolean> {
@@ -419,6 +693,19 @@ class SupabaseDataService {
     try {
       await this.client.from('lead_status').upsert(
         { user_id: userId, assigned_to: employeeId, assigned_at: assignment.assigned_at },
+        { onConflict: 'user_id' }
+      );
+    } catch {}
+    return true;
+  }
+
+  async unassignLead(userId: string): Promise<boolean> {
+    const all = this.getLocalAssignments();
+    delete all[userId];
+    localStorage.setItem('traket_assignments', JSON.stringify(all));
+    try {
+      await this.client.from('lead_status').upsert(
+        { user_id: userId, assigned_to: null, assigned_at: null },
         { onConflict: 'user_id' }
       );
     } catch {}
