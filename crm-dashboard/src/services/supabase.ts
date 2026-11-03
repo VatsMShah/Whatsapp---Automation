@@ -6,6 +6,8 @@ import {
   ClientCompanyProfile,
   Employee,
   LeadAssignment,
+  SessionAssignment,
+  SessionReminderLog,
 } from '../types';
 import { resolvePinCode, estimateDistanceKm } from '../utils/pinResolver';
 
@@ -446,6 +448,86 @@ class SupabaseDataService {
       );
     } catch {}
     return true;
+  }
+
+  // --- SESSION AUTO-ASSIGNMENT & REMINDERS ---
+  getLocalSessionAssignments(): Record<string, SessionAssignment> {
+    try {
+      const stored = localStorage.getItem('traket_session_assignments');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  setSessionAssignment(userId: string, employeeId: string, employeeName: string): SessionAssignment {
+    const all = this.getLocalSessionAssignments();
+    const assignment: SessionAssignment = {
+      user_id: userId,
+      assigned_to: employeeId,
+      assigned_name: employeeName,
+      assigned_at: new Date().toISOString(),
+    };
+    all[userId] = assignment;
+    localStorage.setItem('traket_session_assignments', JSON.stringify(all));
+    return assignment;
+  }
+
+  autoAssignSessions(
+    sessions: SessionRecord[],
+    employees: Employee[]
+  ): { assignments: Record<string, SessionAssignment>; newlyAssignedCount: number } {
+    const activeEmps = employees.filter((e) => e.is_active);
+    const all = this.getLocalSessionAssignments();
+    let newlyAssignedCount = 0;
+
+    if (activeEmps.length === 0) {
+      return { assignments: all, newlyAssignedCount: 0 };
+    }
+
+    let index = Object.keys(all).length % activeEmps.length;
+
+    for (const s of sessions) {
+      if (!all[s.user_id]) {
+        const emp = activeEmps[index % activeEmps.length];
+        all[s.user_id] = {
+          user_id: s.user_id,
+          assigned_to: emp.employee_id,
+          assigned_name: emp.name,
+          assigned_at: new Date().toISOString(),
+        };
+        index++;
+        newlyAssignedCount++;
+      }
+    }
+
+    localStorage.setItem('traket_session_assignments', JSON.stringify(all));
+    return { assignments: all, newlyAssignedCount };
+  }
+
+  getLocalReminderLogs(): Record<string, SessionReminderLog> {
+    try {
+      const stored = localStorage.getItem('traket_session_reminder_logs');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  saveReminderLog(userId: string, stage: 1 | 2 | 3, messageId?: string): SessionReminderLog {
+    const all = this.getLocalReminderLogs();
+    const existing = all[userId] || { user_id: userId };
+    const now = new Date().toISOString();
+
+    if (stage === 1) existing.r1_sent_at = now;
+    if (stage === 2) existing.r2_sent_at = now;
+    if (stage === 3) existing.r3_sent_at = now;
+    existing.last_stage = stage;
+    if (messageId) existing.last_message_id = messageId;
+
+    all[userId] = existing;
+    localStorage.setItem('traket_session_reminder_logs', JSON.stringify(all));
+    return existing;
   }
 }
 

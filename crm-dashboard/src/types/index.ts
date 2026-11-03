@@ -75,3 +75,19 @@ export interface LeadAssignment {
   transferred_from?: string;    // previous employee_id
   transfer_note?: string;
 }
+
+export interface SessionAssignment {
+  user_id: string;
+  assigned_to: string;          // employee_id
+  assigned_name: string;        // employee name
+  assigned_at: string;
+}
+
+export interface SessionReminderLog {
+  user_id: string;
+  r1_sent_at?: string;
+  r2_sent_at?: string;
+  r3_sent_at?: string;
+  last_stage?: 1 | 2 | 3;
+  last_message_id?: string;
+}

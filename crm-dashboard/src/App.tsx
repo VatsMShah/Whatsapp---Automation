@@ -259,6 +259,7 @@ function AppInner() {
             <InquiriesDesk
               sessions={sessions}
               supportTickets={supportTickets}
+              employees={employees}
               onUpdateSupportStatus={handleUpdateSupportStatus}
             />
           )}

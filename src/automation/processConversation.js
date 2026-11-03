@@ -144,6 +144,55 @@ function processConversation(waMessagePayload, masterRows) {
   let data = { ...oldData };
   let response = '';
 
+  // ================= REMINDER BUTTON & DIRECT SUPPORT ACTIONS =================
+  if (message === 'reminder_call_support' || lowerMessage === 'call support' || lowerMessage === 'talk to agent') {
+    state = 'support_flow';
+    response =
+      '📞 *Traket 24/7 Priority Operations & Support Desk* 🚛\n\n' +
+      'Our logistics managers are available to assist you right now!\n\n' +
+      '• Direct Helpline: *+91 9820500159*\n' +
+      '• WhatsApp Call/Chat: *+91 9820500159*\n\n' +
+      '👉 Tap to call directly: tel:+919820500159\n\n' +
+      'An operations manager has also been notified to assist you immediately!';
+    return {
+      user_id: row.user_id || `${phone}_${Date.now()}`,
+      phone: phone,
+      state: state,
+      updated_at: new Date().toISOString(),
+      response: response,
+      flowType: 'support',
+      data: JSON.stringify(data),
+    };
+  }
+
+  if (message === 'reminder_continue' || lowerMessage === 'continue' || lowerMessage === 'continue order') {
+    const promptMap = {
+      main_menu: '🙏 Welcome back! Please select:\n1️⃣ Book a Vehicle\n3️⃣ Support\n\nReply with *1 or 3*',
+      cargo_type: '📦 Welcome back! Please select Cargo Type:\n\n1️⃣ Domestic\n2️⃣ Import\n3️⃣ Export\n\nReply with *1, 2 or 3*',
+      vehicle_type: '🚛 Please select Vehicle Type:\n\n1️⃣ Tempo\n2️⃣ Truck\n3️⃣ Container\n4️⃣ Trailer / ODC\n\nReply with *1, 2, 3 or 4*',
+      loading_pin: '📍 Please enter your 6-digit Loading Pincode (e.g., 400001):',
+      unloading_pin: '📍 Please enter your 6-digit Unloading Pincode:',
+      material: '📦 Please enter the Material / Goods name being transported:',
+      loading_date: '📅 Please provide your vehicle Loading Date (e.g. DD/MM/YYYY):',
+      time_slot: '⏰ Please select Loading Time Slot (e.g. Morning, Afternoon, Evening):',
+      contact_details: '👤 Please enter Contact Person Name & Company Name:',
+      company_name: '🏢 Please enter your Company Name:',
+      contact_name: '👤 Please enter Contact Person Name:',
+      alternate_phone: '📱 Please enter an Alternate Phone Number (or type skip):',
+      quote_confirmation: '📋 Would you like to confirm this booking?\nReply *YES* to confirm or *NO* to cancel.',
+    };
+    response = promptMap[state] || `👋 Welcome back! You paused at *${state.replace(/_/g, ' ')}*. Please reply with your details to proceed.`;
+    return {
+      user_id: row.user_id || `${phone}_${Date.now()}`,
+      phone: phone,
+      state: state,
+      updated_at: new Date().toISOString(),
+      response: response,
+      flowType: data.flowType || row.flowType || 'book',
+      data: JSON.stringify(data),
+    };
+  }
+
   // ================= MAIN MENU =================
   if (state === 'main_menu') {
     const isBookChoice =

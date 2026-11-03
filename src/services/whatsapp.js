@@ -103,4 +103,43 @@ async function sendFlowDatePicker(to, flowId, minDate) {
   });
 }
 
-module.exports = { sendText, sendCtaButtons, sendFlowDatePicker };
+/**
+ * Sends interactive quick-reply buttons (up to 3 buttons)
+ */
+async function sendInteractiveButtons(to, bodyText, buttons) {
+  return callGraphApi({
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: bodyText },
+      action: {
+        buttons: buttons.map((b) => ({
+          type: 'reply',
+          reply: { id: b.id, title: b.title.slice(0, 20) },
+        })),
+      },
+    },
+  });
+}
+
+/**
+ * Sends a 3-button interactive reminder message with Direct Call to Support
+ */
+async function sendSupportReminderButtons(to, bodyText) {
+  return sendInteractiveButtons(to, bodyText, [
+    { id: 'reminder_call_support', title: '📞 Call Support' },
+    { id: 'reminder_continue', title: '💬 Continue Order' },
+    { id: 'cta_new', title: '🔄 Start Fresh' },
+  ]);
+}
+
+module.exports = {
+  sendText,
+  sendCtaButtons,
+  sendFlowDatePicker,
+  sendInteractiveButtons,
+  sendSupportReminderButtons,
+};
