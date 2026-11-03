@@ -31,6 +31,8 @@ interface BookingsTableProps {
   assignments?: Record<string, LeadAssignment>;
   onAssignLead?: (userId: string, employeeId: string) => Promise<void>;
   onTransferLead?: (userId: string, newEmployeeId: string, note: string) => Promise<void>;
+  // Notification deep-linking
+  highlightedBookingId?: string | null;
 }
 
 
@@ -44,6 +46,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
   assignments = {},
   onAssignLead,
   onTransferLead,
+  highlightedBookingId = null,
 }) => {
   const isAdmin = role === 'admin';
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -52,6 +55,34 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
   const [selectedBooking, setSelectedBooking] = useState<FreightBooking | null>(null);
   const [remarksInput, setRemarksInput] = useState<string>('');
   const [isSavingRemarks, setIsSavingRemarks] = useState(false);
+  const [activeGlowId, setActiveGlowId] = useState<string | null>(null);
+
+  // Auto-select and scroll to highlighted booking when deep-linked
+  React.useEffect(() => {
+    if (!highlightedBookingId) return;
+    const target = bookings.find((b) => b.user_id === highlightedBookingId);
+    if (target) {
+      setSelectedBooking(target);
+      setStatusFilter('all');
+      setCargoFilter('all');
+      setEmployeeFilter('all');
+      setActiveGlowId(highlightedBookingId);
+
+      setTimeout(() => {
+        const el = document.getElementById(`booking-row-${highlightedBookingId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+
+      // Auto-dissolve the glowing ring after 6 seconds
+      const fadeTimer = setTimeout(() => {
+        setActiveGlowId(null);
+      }, 6000);
+
+      return () => clearTimeout(fadeTimer);
+    }
+  }, [highlightedBookingId, bookings]);
 
   // Transfer modal state
   const [transferBooking, setTransferBooking] = useState<FreightBooking | null>(null);
@@ -333,10 +364,17 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                   const badge = getStatusBadge(b.status);
                   const shortId = extractShortId(b.user_id);
 
+                  const isHighlighted = activeGlowId === b.user_id;
+
                   return (
                     <tr
                       key={b.user_id}
-                      className="hover:bg-slate-50/80 transition duration-150 group"
+                      id={`booking-row-${b.user_id}`}
+                      className={`transition duration-200 group ${
+                        isHighlighted
+                          ? 'bg-blue-100/70 ring-2 ring-blue-500 shadow-md font-medium'
+                          : 'hover:bg-slate-50/80'
+                      }`}
                     >
                       {/* 1. User ID (Clean without hashtag) */}
                       <td className="py-3.5 px-3.5 whitespace-nowrap">

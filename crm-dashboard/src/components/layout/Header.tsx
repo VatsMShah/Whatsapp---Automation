@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, RefreshCw, Download, ShieldCheck, UserCheck, ChevronDown, UserCircle, LogOut } from 'lucide-react';
+import { Search, RefreshCw, Download, ShieldCheck, UserCheck, ChevronDown, UserCircle, LogOut, Bell } from 'lucide-react';
 import { ClientCompanyProfile, Employee } from '../../types';
 import { UserRole } from '../../context/RoleContext';
 
@@ -12,6 +12,9 @@ interface HeaderProps {
   onRefreshData?: () => void;
   isRefreshing?: boolean;
   onExportCsv?: () => void;
+  // Notifications
+  unreadNotificationsCount?: number;
+  onOpenNotifications?: () => void;
   // Role switcher
   role: UserRole;
   currentEmployee: Employee | null;
@@ -29,6 +32,8 @@ export const Header: React.FC<HeaderProps> = ({
   onRefreshData,
   isRefreshing,
   onExportCsv,
+  unreadNotificationsCount = 0,
+  onOpenNotifications,
   role,
   currentEmployee,
   employees,
@@ -89,6 +94,22 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Download className="w-3.5 h-3.5 text-blue-600" />
             <span>Export CSV</span>
+          </button>
+        )}
+
+        {/* Lead Notification Bell (Employee Interface Only) */}
+        {!isAdmin && onOpenNotifications && (
+          <button
+            onClick={onOpenNotifications}
+            title={`${unreadNotificationsCount} Pending Lead Notifications`}
+            className="relative p-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-xs transition"
+          >
+            <Bell className={`w-4 h-4 ${unreadNotificationsCount > 0 ? 'text-blue-600 animate-pulse' : 'text-slate-500'}`} />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white rounded-full text-[10px] font-black flex items-center justify-center shadow-xs animate-bounce">
+                {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+              </span>
+            )}
           </button>
         )}
 

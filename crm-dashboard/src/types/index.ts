@@ -164,3 +164,24 @@ export interface SessionReminderLog {
   last_stage?: 1 | 2 | 3;
   last_message_id?: string;
 }
+
+export interface LeadNotification {
+  id: string;
+  bookingId: string;
+  title: string;
+  customerName: string;
+  phone: string;
+  companyName?: string;
+  origin: string;
+  destination: string;
+  vehicleType: string;
+  material?: string;
+  weight?: string;
+  assignedTo?: string;
+  assignedAt?: string;
+  createdAt: string;
+  status: 'pending' | 'viewed' | 'dismissed';
+  urgency: 'high' | 'normal' | 'urgent';
+  type: 'new_lead' | 'sla_reminder';
+}
+

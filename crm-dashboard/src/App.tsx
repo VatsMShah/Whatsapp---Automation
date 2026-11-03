@@ -1,12 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { DashboardOverview } from './components/dashboard/DashboardOverview';
 import { BookingsTable } from './components/tables/BookingsTable';
 import { InquiriesDesk } from './components/inquiries/InquiriesDesk';
 import { TeamManager } from './components/team/TeamManager';
+import { PriorityDispatchModal } from './components/notifications/PriorityDispatchModal';
+import { NotificationDrawer } from './components/notifications/NotificationDrawer';
 import { RoleProvider, useRole } from './context/RoleContext';
 import { dbService, ACTIVE_CLIENT_PROFILE } from './services/supabase';
+import {
+  initAudioContext,
+  playDispatchChime,
+  speakLeadAnnouncement,
+} from './utils/sound';
 import {
   FreightBooking,
   SessionRecord,
@@ -15,7 +22,11 @@ import {
   DashboardTab,
   Employee,
   LeadAssignment,
+  LeadNotification,
 } from './types';
+
+// Storage key helper for tracking alerted leads
+const GET_ALERT_STORAGE_KEY = (roleKey: string) => `traket_seen_alerts_${roleKey}`;
 
 // Inner app that has access to RoleContext
 function AppInner() {
@@ -37,6 +48,26 @@ function AppInner() {
   const [isAutoLeadEnabled, setIsAutoLeadEnabled] = useState<boolean>(() =>
     dbService.isAutoLeadAssignmentEnabled()
   );
+
+  // Lead Notifications & Dispatch Modal State
+  const [notifications, setNotifications] = useState<LeadNotification[]>([]);
+  const [activeDispatchAlert, setActiveDispatchAlert] = useState<LeadNotification | null>(null);
+  const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
+  const [highlightedBookingId, setHighlightedBookingId] = useState<string | null>(null);
+  const hasInitializedAlertsRef = useRef(false);
+
+  // Unlock audio on first user interaction
+  useEffect(() => {
+    const handleFirstUserInteraction = () => {
+      initAudioContext();
+    };
+    window.addEventListener('click', handleFirstUserInteraction, { once: true });
+    window.addEventListener('keydown', handleFirstUserInteraction, { once: true });
+    return () => {
+      window.removeEventListener('click', handleFirstUserInteraction);
+      window.removeEventListener('keydown', handleFirstUserInteraction);
+    };
+  }, []);
 
   // Fetch real data from Supabase
   const loadData = async () => {
@@ -63,10 +94,106 @@ function AppInner() {
 
       // Load assignments from local cache (also synced to Supabase)
       setAssignments(currentAssignments);
+
+      // Evaluate and trigger lead notifications
+      syncLeadNotifications(b || [], currentAssignments, role, currentEmployee);
     } catch (err) {
       console.error('Failed to load Supabase data:', err);
     } finally {
       setIsRefreshing(false);
+    }
+  };
+
+  // Evaluate lead notifications for the active user (Admin or Employee)
+  const syncLeadNotifications = (
+    currentBookings: FreightBooking[],
+    currentAssignments: Record<string, LeadAssignment>,
+    currentRole: string,
+    activeEmployee: Employee | null
+  ) => {
+    // Lead notifications are strictly for employees, not the admin panel
+    if (currentRole === 'admin' || !activeEmployee) {
+      setNotifications([]);
+      setActiveDispatchAlert(null);
+      return;
+    }
+
+    // 1. Identify relevant new leads assigned to this employee
+    const relevantBookings = currentBookings.filter((b) => {
+      if (b.status !== 'new') return false;
+      const assignment = currentAssignments[b.user_id];
+      return assignment && assignment.assigned_to === activeEmployee.employee_id;
+    });
+
+    const roleKey = activeEmployee.employee_id;
+    const storageKey = GET_ALERT_STORAGE_KEY(roleKey);
+    let seenIds: string[] = [];
+    try {
+      seenIds = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    } catch (_) {}
+
+    // Map to LeadNotification objects
+    const mapped: LeadNotification[] = relevantBookings.map((b) => {
+      const assignment = currentAssignments[b.user_id];
+      const isOverdue = Date.now() - new Date(b.updated_at).getTime() > 25 * 60 * 1000;
+      return {
+        id: `alert_${b.user_id}`,
+        bookingId: b.user_id,
+        title: isOverdue ? 'Overdue Lead Follow-up' : 'New Freight Booking',
+        customerName: b.contact_name || 'Inquiry Contact',
+        phone: b.phone,
+        companyName: b.company_name,
+        origin: b.originCity || b.origin,
+        destination: b.destinationCity || b.destination,
+        vehicleType: b.vehicle_or_container,
+        material: b.material_or_line,
+        weight: b.weight,
+        assignedTo: assignment?.assigned_to,
+        assignedAt: assignment?.assigned_at,
+        createdAt: b.updated_at,
+        status: 'pending',
+        urgency: isOverdue ? 'urgent' : 'high',
+        type: isOverdue ? 'sla_reminder' : 'new_lead',
+      };
+    });
+
+    setNotifications(mapped);
+
+    // On initial page mount, populate the tray silently without bursting modals for old existing leads
+    if (!hasInitializedAlertsRef.current) {
+      hasInitializedAlertsRef.current = true;
+      const allCurrentIds = mapped.map((m) => m.bookingId);
+      const combinedSeen = Array.from(new Set([...seenIds, ...allCurrentIds]));
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(combinedSeen));
+      } catch (_) {}
+      return;
+    }
+
+    // For any fresh leads arriving after initial load, pop up the Priority Blur Alert!
+    const unseen = mapped.find((m) => !seenIds.includes(m.bookingId));
+    if (unseen && !activeDispatchAlert) {
+      setActiveDispatchAlert(unseen);
+
+      // Record as seen in this browser so it doesn't pop up again endlessly
+      try {
+        localStorage.setItem(storageKey, JSON.stringify([...seenIds, unseen.bookingId]));
+      } catch (_) {}
+
+      // Play audio chime and voice announcement
+      playDispatchChime();
+      const originCity = (unseen.origin || 'Source').split(',')[0].trim();
+      const destCity = (unseen.destination || 'Destination').split(',')[0].trim();
+      speakLeadAnnouncement(`New lead assigned from ${originCity} to ${destCity}.`);
+
+      // Browser Desktop Push Notification (works even if user is on another tab)
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('🚨 New Lead Assigned - Traket CRM', {
+            body: `${unseen.customerName}: ${originCity} ➔ ${destCity} (${unseen.vehicleType})`,
+          });
+        }
+      } catch (_) {}
     }
   };
 
@@ -78,12 +205,74 @@ function AppInner() {
     return () => clearInterval(interval);
   }, []);
 
+  // When role or active employee changes, refresh notifications (strictly for employee view)
+  useEffect(() => {
+    if (role === 'admin') {
+      setNotifications([]);
+      setActiveDispatchAlert(null);
+      setIsNotificationDrawerOpen(false);
+    } else if (bookings.length > 0) {
+      syncLeadNotifications(bookings, assignments, role, currentEmployee);
+    }
+  }, [role, currentEmployee]);
+
   // If employee switches to a tab they can't access, reset to orders
   useEffect(() => {
     if (!isAdmin && (currentTab === 'overview' || currentTab === 'team')) {
       setCurrentTab('orders');
     }
   }, [isAdmin, currentTab]);
+
+  // Action: Open and jump straight to the lead row from a notification
+  const handleOpenLeadFromNotification = (bookingId: string) => {
+    setActiveDispatchAlert(null);
+    setCurrentTab('orders');
+    setHighlightedBookingId(bookingId);
+
+    // Mark as attended in local notification state
+    setNotifications((prev) =>
+      prev.map((n) => (n.bookingId === bookingId ? { ...n, status: 'viewed' } : n))
+    );
+  };
+
+  // Action: Dock the popup into the tray
+  const handleDockToTray = React.useCallback((_notifId: string) => {
+    setActiveDispatchAlert(null);
+  }, []);
+
+  // Action: Dismiss a single notification from tray
+  const handleDismissNotification = (notifId: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== notifId));
+  };
+
+  // Action: Clear all notifications from tray
+  const handleClearAllNotifications = () => {
+    setNotifications([]);
+  };
+
+  // Action: Trigger a complete test alert (Modal + Blur + Chime + Voice)
+  const handleTriggerTestAlert = () => {
+    const sampleAlert: LeadNotification = {
+      id: `test_${Date.now()}`,
+      bookingId: bookings[0]?.user_id || 'test_booking_sample',
+      title: '🚨 Test Priority Dispatch Alert',
+      customerName: 'Sanjay Sharma (ABC Logistics)',
+      phone: '+91 98205 00159',
+      companyName: 'ABC Transporters Pvt Ltd',
+      origin: 'Mumbai, Maharashtra',
+      destination: 'Ahmedabad, Gujarat',
+      vehicleType: '32ft MXL Container',
+      material: 'Industrial FMCG Goods',
+      weight: '14 MT',
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+      urgency: 'high',
+      type: 'new_lead',
+    };
+    setActiveDispatchAlert(sampleAlert);
+    playDispatchChime();
+    speakLeadAnnouncement('Test lead alert: Mumbai to Ahmedabad container inquiry.');
+  };
 
   const handleUpdateBookingStatus = async (
     userId: string,
@@ -105,6 +294,14 @@ function AppInner() {
           : b
       )
     );
+
+    // If status is updated away from 'new', remove from pending notifications
+    if (status !== 'new' || remarks) {
+      setNotifications((prev) => prev.filter((n) => n.bookingId !== userId));
+      if (activeDispatchAlert?.bookingId === userId) {
+        setActiveDispatchAlert(null);
+      }
+    }
   };
 
   const handleUpdateSupportStatus = async (
@@ -250,6 +447,8 @@ function AppInner() {
           onRefreshData={loadData}
           isRefreshing={isRefreshing}
           onExportCsv={handleExportCsv}
+          unreadNotificationsCount={isAdmin ? 0 : notifications.filter((n) => n.status === 'pending').length}
+          onOpenNotifications={isAdmin ? undefined : () => setIsNotificationDrawerOpen(true)}
           role={role}
           currentEmployee={currentEmployee}
           employees={employees}
@@ -270,6 +469,7 @@ function AppInner() {
               assignments={assignments}
               onAssignLead={handleAssignLead}
               onTransferLead={handleTransferLead}
+              highlightedBookingId={highlightedBookingId}
             />
           )}
 
@@ -305,6 +505,28 @@ function AppInner() {
           )}
         </main>
       </div>
+
+      {/* 10-Second Priority Dispatch Full-Screen Blur Modal (Employee View Only) */}
+      {!isAdmin && (
+        <PriorityDispatchModal
+          notification={activeDispatchAlert}
+          onOpenLead={handleOpenLeadFromNotification}
+          onDockToTray={handleDockToTray}
+        />
+      )}
+
+      {/* Notification Drawer (Pending Leads Tray - Employee View Only) */}
+      {!isAdmin && (
+        <NotificationDrawer
+          isOpen={isNotificationDrawerOpen}
+          onClose={() => setIsNotificationDrawerOpen(false)}
+          notifications={notifications}
+          onOpenLead={handleOpenLeadFromNotification}
+          onDismiss={handleDismissNotification}
+          onClearAll={handleClearAllNotifications}
+          onTriggerTestAlert={handleTriggerTestAlert}
+        />
+      )}
     </div>
   );
 }
