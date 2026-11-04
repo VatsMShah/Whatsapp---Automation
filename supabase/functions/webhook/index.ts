@@ -855,6 +855,41 @@ async function sendWhatsAppTruckSizeList(to: string, bodyText?: string) {
   return data;
 }
 
+async function sendWhatsAppDecisionMakerButtons(to: string) {
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: {
+          text:
+            "👤 *Are you the final Commercial Decision-Maker / Rate Approver for this booking?*\n\n" +
+            "Please select your role to ensure official freight quotes and rate approvals reach the right person:",
+        },
+        footer: { text: "Reply Back to edit Contact Name" },
+        action: {
+          buttons: [
+            { type: "reply", reply: { id: "self", title: "✅ Yes, I Approve" } },
+            { type: "reply", reply: { id: "on_behalf", title: "👥 On Behalf of Mgr" } },
+            { type: "reply", reply: { id: "back", title: "⬅️ Back" } },
+          ],
+        },
+      },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) console.error("❌ WhatsApp Decision Maker Buttons error:", { status: res.status, data });
+  return data;
+}
+
 async function sendWhatsAppWithBackButton(to: string, text: string) {
   // Strip _(Reply *Back* to ...)_ hint — we show a real button instead
   const cleanText = text.replace(/\n*_?\(Reply \*Back\* to [^)]+\)_?/g, "").trim();
@@ -1278,14 +1313,34 @@ async function processConversation(chat: any, masterRows: any[]) {
       delete data.company;
       state = "company";
       response = "🏢 Enter your *Company Name*:\n(or type *NA* if individual)\n\n_(Reply *Back* to edit Loading Time)_";
-    } else if (state === "email") {
+    } else if (state === "authority_role") {
       delete data.contactName;
+      delete data.submitterName;
+      delete data.submitterPhone;
       state = "contact_name";
       response = "👤 Enter *Contact Person Name*:\n\n_(Reply *Back* to edit Company Name)_";
+    } else if (state === "approver_name") {
+      state = "authority_role";
+      response = "";
+    } else if (state === "approver_phone") {
+      delete data.approverName;
+      state = "approver_name";
+      response = "👑 Enter *Decision-Maker's Name & Designation*:\n(e.g., Vikram Mehta - Purchase Head / Import Manager / Owner)\n\n_(Reply *Back* to edit Role Selection)_";
+    } else if (state === "email") {
+      if (data.isDecisionMaker === false) {
+        delete data.approverPhone;
+        delete data.alternatePhone;
+        state = "approver_phone";
+        response = "📱 Enter *Decision-Maker's Direct Phone / WhatsApp Number*:\n(For sending official freight quote and rate approvals)\n\n_(Reply *Back* to edit Decision-Maker's Name)_";
+      } else {
+        delete data.isDecisionMaker;
+        state = "authority_role";
+        response = "";
+      }
     } else if (state === "alternate_phone") {
       delete data.email;
       state = "email";
-      response = "📧 Enter your *Email Address*:\n(or type *Skip*)\n\n_(Reply *Back* to edit Contact Name)_";
+      response = "📧 Enter your *Email Address*:\n(or type *Skip*)\n\n_(Reply *Back* to edit " + (data.isDecisionMaker === false ? "Decision-Maker's Number" : "Contact Role") + ")_";
     }
     // Transporter Provider Flow - Step Back
     else if (["provider_tempo_size", "provider_truck_size", "provider_container_size", "provider_trailer_size"].includes(state)) {
@@ -2013,24 +2068,75 @@ async function processConversation(chat: any, masterRows: any[]) {
     state = "contact_name";
     response = "👤 Enter *Contact Person Name*:\n\n_(Reply *Back* to edit Company Name)_";
   } else if (state === "contact_name") {
-    data.contactName = message;
-    state = "email";
-    response = "📧 Enter your *Email Address*:\n(or type *Skip*)\n\n_(Reply *Back* to edit Contact Name)_";
+    data.contactName = message.trim();
+    data.submitterName = message.trim();
+    data.submitterPhone = formatDisplayPhone(phone);
+    state = "authority_role";
+    response = "";
+  } else if (state === "authority_role") {
+    const isSelf = message === "self" || message === "1" || /yes|approve|self|own/i.test(lowerMessage);
+    const isOnBehalf = message === "on_behalf" || message === "2" || /behalf|manager|other|boss/i.test(lowerMessage);
+
+    if (isSelf) {
+      data.isDecisionMaker = true;
+      data.approverName = data.contactName;
+      data.approverPhone = formatDisplayPhone(phone);
+      data.approverRole = "Decision Maker (Self)";
+      state = "email";
+      response = "📧 Enter your *Email Address*:\n(or type *Skip*)\n\n_(Reply *Back* to edit Contact Role)_";
+    } else if (isOnBehalf) {
+      data.isDecisionMaker = false;
+      state = "approver_name";
+      response = "👑 Enter *Decision-Maker's Name & Designation*:\n(e.g., Vikram Mehta - Purchase Head / Import Manager / Owner)\n\n_(Reply *Back* to edit Selection)_";
+    } else {
+      response =
+        "❌ Please select your role using the buttons below, or reply *1* (Yes, I Approve) or *2* (On Behalf of Manager):\n\n" +
+        "_(Reply *Back* to edit Contact Name)_";
+    }
+  } else if (state === "approver_name") {
+    if (message.trim().length >= 2) {
+      data.approverName = message.trim();
+      state = "approver_phone";
+      response =
+        "📱 Enter *Decision-Maker's Direct WhatsApp / Phone Number*:\n" +
+        "(For sending official freight quotes and rate approvals)\n\n" +
+        "_(Reply *Back* to edit Decision-Maker's Name)_";
+    } else {
+      response =
+        "❌ Please enter a valid name & designation for the decision-maker (e.g., Vikram Mehta - Purchase Head):\n\n" +
+        "_(Reply *Back* to edit Selection)_";
+    }
+  } else if (state === "approver_phone") {
+    const cleanDigits = message.replace(/\D/g, "");
+    const isValidPhone = !/[a-zA-Z]/.test(message) && cleanDigits.length >= 10 && cleanDigits.length <= 15;
+    if (isValidPhone) {
+      data.approverPhone = formatDisplayPhone(message.trim());
+      data.alternatePhone = data.approverPhone;
+      data.approverRole = "Commercial Approver";
+      state = "email";
+      response = "📧 Enter your *Email Address*:\n(or type *Skip*)\n\n_(Reply *Back* to edit Decision-Maker's Number)_";
+    } else {
+      response =
+        "❌ Invalid phone number.\n\n" +
+        "Please enter a valid 10-digit mobile number for the decision-maker (e.g., 9820500159):\n\n" +
+        "_(Reply *Back* to edit Decision-Maker's Name)_";
+    }
   } else if (state === "email") {
     const isSkip = ["skip", "na", "n/a"].includes(lowerMessage);
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (isSkip || emailRegex.test(message.trim())) {
       data.email = isSkip ? "" : message.trim();
       state = "alternate_phone";
-      response =
-        "📱 Enter your *Alternate Number*:\n" +
-        "(or type *Skip*)\n\n" +
-        "_(Reply *Back* to edit Email Address)_";
+      const altPrompt = data.isDecisionMaker === false
+        ? "📱 Enter your *Submitter Alternate Phone*:\n(or type *Skip*)\n\n_(Reply *Back* to edit Email Address)_"
+        : "📱 Enter your *Alternate Number*:\n(or type *Skip*)\n\n_(Reply *Back* to edit Email Address)_";
+      response = altPrompt;
     } else {
+      const emailBackStep = data.isDecisionMaker === false ? "Decision-Maker's Number" : "Contact Role";
       response =
         "❌ Invalid email format.\n\nPlease enter a valid email address (e.g., rahul@gmail.com, info@company.co.in)\n" +
         "or type *Skip*:\n\n" +
-        "_(Reply *Back* to edit Contact Name)_";
+        `_(Reply *Back* to edit ${emailBackStep})_`;
     }
   } else if (state === "alternate_phone") {
     const isSkip = ["skip", "na", "n/a", "no", "none", "nil"].includes(lowerMessage);
@@ -2038,7 +2144,9 @@ async function processConversation(chat: any, masterRows: any[]) {
     const isValidPhone = !/[a-zA-Z]/.test(message) && cleanDigits.length >= 10 && cleanDigits.length <= 15;
 
     if (isSkip || isValidPhone) {
-      data.alternatePhone = isSkip ? "" : formatDisplayPhone(message.trim());
+      if (!isSkip) {
+        data.alternatePhone = formatDisplayPhone(message.trim());
+      }
       data.phone = phone;
       state = "cta_menu";
 
@@ -2073,6 +2181,20 @@ async function processConversation(chat: any, masterRows: any[]) {
       const displayPhone = formatDisplayPhone(data.phone || phone);
       const displayAltPhone = data.alternatePhone ? formatDisplayPhone(data.alternatePhone) : "";
 
+      let contactSummary = "";
+      if (data.isDecisionMaker === false) {
+        contactSummary =
+          `👑 *Decision-Maker (Approver):* ${data.approverName}\n` +
+          `📞 *Approver Direct Number:* ${data.approverPhone || data.alternatePhone}\n` +
+          `👤 *Submitted By:* ${data.submitterName || data.contactName} (${data.company || "Operations"})\n` +
+          (displayPhone ? `📱 *Submitter Phone:* ${displayPhone}\n` : "");
+      } else {
+        contactSummary =
+          `👤 *Contact / Approver:* ${data.contactName} (${data.company})\n` +
+          (displayPhone ? `📱 *Number:* ${displayPhone}\n` : "") +
+          (displayAltPhone ? `📞 *Alternate Number:* ${displayAltPhone}\n` : "");
+      }
+
       response =
         "✅ *Booking Request Submitted Successfully!*\n\n" +
         routeLine +
@@ -2088,9 +2210,7 @@ async function processConversation(chat: any, masterRows: any[]) {
         (data.dimensions ? `📐 *Dimensions:* ${data.dimensions}\n` : "") +
         (logisticsDetails ? `\n${logisticsDetails}` : "") +
         `📅 *Loading Date & Time:* ${data.loadingDate}${data.loadingTime ? ` (${data.loadingTime})` : ""}\n` +
-        `👤 *Contact:* ${data.contactName} (${data.company})\n` +
-        (displayPhone ? `📱 *Number:* ${displayPhone}\n` : "") +
-        (displayAltPhone ? `📞 *Alternate Number:* ${displayAltPhone}\n` : "") +
+        contactSummary +
         (data.email ? `📧 *Email:* ${data.email}\n` : "") +
         "\nOur team is finding the best quote and will contact you shortly! 🚛💨";
     } else {
@@ -2460,6 +2580,11 @@ serve(async (req: Request) => {
               } else {
                 await sendWhatsAppTimeSlotButtons(output.phone, output.response, backHint);
               }
+            } else if (output.state === "authority_role") {
+              if (output.response && output.response.startsWith("❌")) {
+                await sendWhatsAppText(output.phone, output.response);
+              }
+              await sendWhatsAppDecisionMakerButtons(output.phone);
             } else if (output.state === "main_menu") {
               await sendWhatsAppMainMenuButtons(output.phone);
             } else if (output.response) {
@@ -2530,6 +2655,11 @@ serve(async (req: Request) => {
                 contact_name: parsedData.contactName || "",
                 email: parsedData.email || "",
                 remarks: remarks,
+                is_decision_maker: parsedData.isDecisionMaker !== undefined ? parsedData.isDecisionMaker : true,
+                approver_name: parsedData.approverName || (parsedData.isDecisionMaker ? parsedData.contactName : ""),
+                approver_phone: parsedData.approverPhone || (parsedData.isDecisionMaker ? (parsedData.phone || phone) : ""),
+                approver_role: parsedData.approverRole || (parsedData.isDecisionMaker ? "Decision Maker (Self)" : "Approver"),
+                alternate_phone: parsedData.alternatePhone || (parsedData.isDecisionMaker === false ? parsedData.approverPhone : ""),
                 flow_data: {
                   loading_pin: parsedData.loadingPin || "",
                   loading_location: parsedData.loadingLocation || "",
@@ -2553,6 +2683,12 @@ serve(async (req: Request) => {
                   port_cfs: parsedData.portCfs || "",
                   cargo_dimensions: parsedData.dimensions || "",
                   alternate_phone: parsedData.alternatePhone || "",
+                  is_decision_maker: parsedData.isDecisionMaker !== undefined ? parsedData.isDecisionMaker : true,
+                  approver_name: parsedData.approverName || "",
+                  approver_phone: parsedData.approverPhone || "",
+                  approver_role: parsedData.approverRole || "",
+                  submitter_name: parsedData.submitterName || parsedData.contactName || "",
+                  submitter_phone: parsedData.submitterPhone || parsedData.phone || phone,
                 },
                 updated_at: output.updated_at,
               });

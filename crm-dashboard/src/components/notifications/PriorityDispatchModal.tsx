@@ -132,26 +132,74 @@ export const PriorityDispatchModal: React.FC<PriorityDispatchModalProps> = ({
         {/* Content Body */}
         <div className="p-6 space-y-5">
           {/* Customer & Contact Row */}
-          <div className="flex items-start justify-between bg-slate-50 border border-slate-200/80 rounded-2xl p-4">
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Customer Details
-              </div>
-              <h3 className="text-base font-extrabold text-slate-900 mt-0.5">
-                {notification.customerName || 'Direct Freight Shipper'}
-              </h3>
-              {notification.companyName && (
-                <p className="text-xs font-medium text-slate-500">{notification.companyName}</p>
-              )}
-            </div>
+          <div className="space-y-2">
+            {notification.approverPhone && notification.approverPhone !== notification.phone ? (
+              <div className="space-y-2">
+                {/* 1. Commercial Decision Maker */}
+                <div className="flex items-center justify-between bg-amber-50/80 border border-amber-200 rounded-2xl p-3.5">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-amber-800 flex items-center space-x-1">
+                      <Sparkles className="w-3 h-3 text-amber-600" />
+                      <span>Commercial Decision-Maker (Approver)</span>
+                    </div>
+                    <h3 className="text-sm font-extrabold text-slate-900 mt-0.5">
+                      {notification.approverName || 'Decision Maker'}
+                    </h3>
+                    {notification.approverRole && (
+                      <p className="text-[10px] font-semibold text-amber-700">{notification.approverRole}</p>
+                    )}
+                  </div>
+                  <a
+                    href={`tel:${notification.approverPhone.replace(/\D/g, '')}`}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition active:scale-95 shrink-0"
+                  >
+                    <Phone className="w-3 h-3 fill-current" />
+                    <span>Call Approver</span>
+                  </a>
+                </div>
 
-            <a
-              href={`tel:${cleanPhone}`}
-              className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition active:scale-95"
-            >
-              <Phone className="w-3.5 h-3.5 fill-current" />
-              <span>{displayPhone}</span>
-            </a>
+                {/* 2. Submitter Operational Contact */}
+                <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-2xl p-3">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Lead Submitter (Operations / Store)
+                    </div>
+                    <div className="text-xs font-bold text-slate-800">
+                      {notification.customerName} {notification.companyName ? `• ${notification.companyName}` : ''}
+                    </div>
+                  </div>
+                  <a
+                    href={`tel:${cleanPhone}`}
+                    className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold transition"
+                  >
+                    <Phone className="w-3 h-3" />
+                    <span>{displayPhone}</span>
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start justify-between bg-slate-50 border border-slate-200/80 rounded-2xl p-4">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 flex items-center space-x-1">
+                    <span>Direct Decision-Maker (Self)</span>
+                  </div>
+                  <h3 className="text-base font-extrabold text-slate-900 mt-0.5">
+                    {notification.customerName || 'Direct Freight Shipper'}
+                  </h3>
+                  {notification.companyName && (
+                    <p className="text-xs font-medium text-slate-500">{notification.companyName}</p>
+                  )}
+                </div>
+
+                <a
+                  href={`tel:${cleanPhone}`}
+                  className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition active:scale-95"
+                >
+                  <Phone className="w-3.5 h-3.5 fill-current" />
+                  <span>{displayPhone}</span>
+                </a>
+              </div>
+            )}
           </div>
 
           {/* Route Section */}

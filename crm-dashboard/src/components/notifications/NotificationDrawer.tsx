@@ -46,6 +46,9 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
 }) => {
   const [muted, setMuted] = React.useState<boolean>(() => isAudioMuted());
   const [voiceEnabled, setVoiceState] = React.useState<boolean>(() => isVoiceNotificationEnabled());
+  const [browserPermission, setBrowserPermission] = React.useState<string>(() => {
+    return typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported';
+  });
 
   if (!isOpen) return null;
 
@@ -59,6 +62,17 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
     const next = !voiceEnabled;
     setVoiceState(next);
     setVoiceEnabled(next);
+  };
+
+  const requestBrowserPermission = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const res = await Notification.requestPermission();
+        setBrowserPermission(res);
+      } catch (e) {
+        console.warn('Failed to request notification permission:', e);
+      }
+    }
   };
 
   const testAlert = () => {
@@ -149,6 +163,27 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                 {voiceEnabled ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
                 <span>{voiceEnabled ? 'Voice On' : 'Voice Off'}</span>
               </button>
+
+              {browserPermission === 'default' && (
+                <button
+                  onClick={requestBrowserPermission}
+                  className="p-1.5 rounded-md border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 flex items-center space-x-1 font-semibold text-[11px] transition"
+                  title="Enable Browser Desktop Push Alerts"
+                >
+                  <Bell className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Push</span>
+                </button>
+              )}
+
+              {browserPermission === 'granted' && (
+                <span
+                  className="p-1.5 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 flex items-center space-x-1 font-semibold text-[11px]"
+                  title="Browser Desktop Notifications Active"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Push On</span>
+                </span>
+              )}
             </div>
 
             <button
@@ -205,6 +240,25 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                         <div className="text-[11px] text-slate-500 font-medium">{notif.companyName}</div>
                       )}
                     </div>
+
+                    {/* Decision Maker badge if on behalf */}
+                    {notif.approverPhone && notif.approverPhone !== notif.phone && (
+                      <div className="mb-2.5 p-2 rounded-xl bg-amber-50 border border-amber-200/90 text-[11px] text-amber-950 flex items-center justify-between">
+                        <div className="min-w-0 pr-1">
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 block">👑 Commercial Approver</span>
+                          <span className="font-extrabold truncate block">{notif.approverName || notif.approverPhone}</span>
+                          {notif.approverRole && (
+                            <span className="text-[10px] text-amber-700 block truncate">{notif.approverRole}</span>
+                          )}
+                        </div>
+                        <a
+                          href={`tel:${notif.approverPhone.replace(/\D/g, '')}`}
+                          className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] shrink-0 shadow-2xs"
+                        >
+                          Call Approver
+                        </a>
+                      </div>
+                    )}
 
                     {/* Route */}
                     <div className="bg-slate-50 rounded-xl p-2.5 text-xs font-bold text-slate-800 mb-2 flex items-center space-x-2">

@@ -97,8 +97,8 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Lead Notification Bell (Employee Interface Only) */}
-        {!isAdmin && onOpenNotifications && (
+        {/* Lead Notification Bell */}
+        {onOpenNotifications && (
           <button
             onClick={onOpenNotifications}
             title={`${unreadNotificationsCount} Pending Lead Notifications`}

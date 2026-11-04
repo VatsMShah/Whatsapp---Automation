@@ -27,118 +27,109 @@ export const ACTIVE_CLIENT_PROFILE: ClientCompanyProfile = {
 };
 
 /**
- * Categorizes a raw vehicle/container string into standard Traket vehicle categories:
- * - Truck (16ft, 19ft, 22ft, 24ft, 32ft, 10–40 MT Open/Full Body)
- * - Tempo (Tata Ace, Bolero, Pickup, 7ft to 17ft LCVs)
- * - Container (Domestic) (20ft, 24ft, 32ft SXL/MXL Close Body)
- * - Trailer / ODC (Flatbed, Lowbed, AMW 40 MT, Hydraulic, ODC)
- * - FCL 40 HC / HCL (40 High Cube Shipping Containers)
- * - FCL 20 (20 GP) (20ft General Purpose Shipping Containers)
- * - FCL 40 (40 GP) (40ft General Purpose Shipping Containers)
- * - Special Containers (Tank / Flexi / FR) (ISO Tank, Flexi, Flat Rack, Reefer)
+ * Categorizes a raw vehicle/container string into standard Traket vehicle categories directly from WhatsApp:
+ * - Tempo (Small loads 1 - 10 MT)
+ * - Truck (Open / Closed 12 - 40 MT)
+ * - Container (Domestic) (32 Ft SXL / MXL Close Body)
+ * - Trailer / ODC (3518, 4018, AMW)
+ * - FCL 20 (20 GP, 20 FLEXI, 20 TANK)
+ * - FCL 40 (40 HC, 40 Open Top, 40 FR)
  */
 export function categorizeVehicle(vehicleStr?: string, cargoType?: string): TraketVehicleType | 'General' {
   if (!vehicleStr) return 'General';
   const v = vehicleStr.toLowerCase();
   const c = (cargoType || '').toLowerCase();
 
-  // 1. Explicit prefixes / words (most reliable from DB: 'Tempo – ...', 'Truck – ...', 'Container – ...')
-  if (v.startsWith('tempo') || /\btempo\b/.test(v)) {
+  // 1. Explicit Tempo
+  if (
+    v.startsWith('tempo') ||
+    /\btempo\b/.test(v) ||
+    v.includes('pickup') ||
+    v.includes('ace') ||
+    v.includes('bolero')
+  ) {
     return 'Tempo';
   }
 
-  // 2. EXIM Special Containers (Tank, Flexi, Flat Rack, Reefer)
+  // 2. FCL 20 (20 GP, 20 Flexi, 20 Tank, Tuskar)
   if (
-    v.includes('tank') ||
+    v.includes('fcl 20') ||
+    v.includes('20 gp') ||
+    v.includes('20gp') ||
+    v.includes('20 flexi') ||
     v.includes('flexi') ||
-    v.includes(' fr') ||
-    v.includes('(40 fr)') ||
-    v.includes('reefer') ||
-    v.includes('flat rack')
+    v.includes('20 tank') ||
+    v.includes('tank') ||
+    v.includes('tuskar')
   ) {
-    return 'Special Containers (Tank / Flexi / FR)';
+    return 'FCL 20';
   }
 
-  // 3. FCL 40 HC / HCL (High Cube Containers)
+  // 3. FCL 40 (40 HC, 40 Open Top, 40 FR)
   if (
+    v.includes('fcl 40') ||
     v.includes('40 hc') ||
     v.includes('40hc') ||
-    v.includes('hcl') ||
-    v.includes('high cube') ||
-    (v.includes('40') && v.includes('hc'))
+    v.includes('40 open') ||
+    v.includes('open top') ||
+    v.includes('40 fr') ||
+    v.includes('flat rack') ||
+    ((c.includes('import') || c.includes('export')) &&
+      (v.includes('3518 (24') || v.includes('4018 (29') || v.includes('amw (30')))
   ) {
-    return 'FCL 40 HC / HCL';
+    return 'FCL 40';
   }
 
-  // 4. FCL 20 GP
-  if (v.includes('20 gp') || v.includes('20gp') || (v.includes('fcl 20') && !v.includes('40'))) {
-    return 'FCL 20 (20 GP)';
-  }
-
-  // 5. FCL 40 GP
-  if (v.includes('40 gp') || v.includes('40gp') || (v.includes('fcl 40') && !v.includes('hc') && !v.includes('fr'))) {
-    return 'FCL 40 (40 GP)';
-  }
-
-  // Generic FCL if any remaining
+  // Generic FCL / Import / Export fallback
   if (v.includes('fcl') || c.includes('import') || c.includes('export')) {
-    if (v.includes('40')) return 'FCL 40 HC / HCL';
-    if (v.includes('20')) return 'FCL 20 (20 GP)';
+    if (v.includes('20')) return 'FCL 20';
+    return 'FCL 40';
   }
 
-  // 6. Trailer / ODC
+  // 4. Trailer / ODC
   if (
     v.startsWith('trailer') ||
     v.includes('trailer') ||
     v.includes('odc') ||
-    v.includes('flatbed') ||
-    v.includes('lowbed') ||
-    v.includes('hydraulic') ||
-    v.includes('amw')
+    v.includes('over dimension') ||
+    v.includes('highbed') ||
+    v.includes('semi bed') ||
+    v.includes('low bed') ||
+    v.includes('3518 (27') ||
+    v.includes('4018 (33') ||
+    v.includes('amw (40')
   ) {
     return 'Trailer / ODC';
   }
 
-  // 7. Domestic Container
+  // 5. Domestic Container (32 Ft SXL, MXL)
   if (
     v.startsWith('container') ||
     v.includes('close body') ||
     v.includes('mxl') ||
     v.includes('sxl') ||
-    v.includes('container')
+    v.includes('32 ft container')
   ) {
     return 'Container (Domestic)';
   }
 
-  // 8. Truck
+  // 6. Truck (12 - 40 MT, Open / Closed)
   if (
     v.startsWith('truck') ||
     /\btruck\b/.test(v) ||
-    v.includes('open') ||
+    v.includes('taurus') ||
     v.includes('full body') ||
     v.includes('pona dala') ||
-    v.includes('half /') ||
+    v.includes('open body') ||
+    v.includes('close body') ||
     v.includes('12 mt') ||
+    v.includes('18 mt') ||
+    v.includes('25 mt') ||
     v.includes('30 mt') ||
     v.includes('35 mt') ||
-    v.includes('40 mt') ||
-    v.includes('24 ft')
+    v.includes('40 mt')
   ) {
     return 'Truck';
-  }
-
-  // 9. Other Tempo keywords
-  if (
-    v.includes('pickup') ||
-    v.includes('ace') ||
-    v.includes('bolero') ||
-    v.includes('7 ft') ||
-    v.includes('8 ft') ||
-    v.includes('9 ft') ||
-    v.includes('14 ft') ||
-    v.includes('17 ft')
-  ) {
-    return 'Tempo';
   }
 
   return 'General';
@@ -307,6 +298,22 @@ class SupabaseDataService {
         : b.remarks || flow.remarks || '';
     const status = statusEntry?.status || 'new';
 
+    const vehicleSubType =
+      b.vehicle_sub_type ||
+      flow.vehicle_sub_type ||
+      flow.vehicleSubType ||
+      '';
+
+    const isDecisionMaker = b.is_decision_maker !== undefined
+      ? b.is_decision_maker
+      : (flow.is_decision_maker !== undefined ? flow.is_decision_maker : (!b.approver_name && !flow.approver_name));
+
+    const approverName = b.approver_name || flow.approver_name || flow.approverName || (isDecisionMaker ? contactName : '');
+    const approverPhone = b.approver_phone || flow.approver_phone || flow.approverPhone || alternatePhone || (isDecisionMaker ? phone : '');
+    const approverRole = b.approver_role || flow.approver_role || flow.approverRole || (isDecisionMaker ? 'Decision Maker (Self)' : 'Commercial Approver');
+    const submitterName = b.submitter_name || flow.submitter_name || flow.submitterName || contactName;
+    const submitterPhone = b.submitter_phone || flow.submitter_phone || flow.submitterPhone || phone;
+
     return {
       user_id: b.user_id,
       phone,
@@ -327,6 +334,15 @@ class SupabaseDataService {
       status,
       updated_at: b.updated_at || new Date().toISOString(),
       flow_data: flow,
+      vehicle_sub_type: vehicleSubType,
+
+      // Decision-Maker vs Submitter separation
+      is_decision_maker: isDecisionMaker,
+      approver_name: approverName,
+      approver_phone: approverPhone,
+      approver_role: approverRole,
+      submitter_name: submitterName,
+      submitter_phone: submitterPhone,
 
       // Geocoded details
       originCity: originCity,
@@ -451,7 +467,7 @@ class SupabaseDataService {
         .order('created_at', { ascending: true });
       if (error || !data) return this.getLocalEmployees();
 
-      // Merge with local storage for custom fields like assigned_vehicles
+      // Merge with local storage for custom fields like assigned_vehicles & assigned_subtypes
       const localEmps = this.getLocalEmployees();
       const localMap = new Map(localEmps.map((e) => [e.employee_id, e]));
       const merged: Employee[] = (data as any[]).map((d) => {
@@ -459,6 +475,7 @@ class SupabaseDataService {
         return {
           ...d,
           assigned_vehicles: d.assigned_vehicles || local?.assigned_vehicles || [],
+          assigned_subtypes: d.assigned_subtypes || local?.assigned_subtypes || [],
         };
       });
 
@@ -499,6 +516,7 @@ class SupabaseDataService {
       id: emp.employee_id,
       created_at: new Date().toISOString(),
       assigned_vehicles: emp.assigned_vehicles || [],
+      assigned_subtypes: emp.assigned_subtypes || [],
     };
     if (exists >= 0) all[exists] = newEmp;
     else all.push(newEmp);
@@ -512,8 +530,8 @@ class SupabaseDataService {
         .select()
         .single();
 
-      if (error && error.message?.includes('assigned_vehicles')) {
-        const { assigned_vehicles, ...rest } = payload;
+      if (error && (error.message?.includes('assigned_vehicles') || error.message?.includes('assigned_subtypes'))) {
+        const { assigned_vehicles, assigned_subtypes, ...rest } = payload;
         const retryRes = await this.client
           .from('employees')
           .upsert(rest, { onConflict: 'employee_id' })
@@ -524,7 +542,11 @@ class SupabaseDataService {
       }
 
       if (data) {
-        return { ...data, assigned_vehicles: emp.assigned_vehicles || [] } as Employee;
+        return {
+          ...data,
+          assigned_vehicles: emp.assigned_vehicles || [],
+          assigned_subtypes: emp.assigned_subtypes || [],
+        } as Employee;
       }
     } catch (e) {
       console.warn('Supabase upsertEmployee fallback to local storage:', e);
@@ -614,9 +636,10 @@ class SupabaseDataService {
       return { assignedCount: 0, updatedAssignments: updated };
     }
 
-    // 2. STRICT VEHICLE ASSIGNMENT:
+    // 2. STRICT VEHICLE & SUBTYPE ASSIGNMENT:
     // If a lead is for a vehicle, ONLY assign to employees configured for that specific vehicle.
-    // If no matching employee exists, KEEP IT UNASSIGNED (never fallback to truck employee).
+    // If specialists configured for that specific subtype/weight exist, prioritize them!
+    // If no matching employee exists, KEEP IT UNASSIGNED.
     for (const b of bookings) {
       // Skip if already assigned
       if (updated[b.user_id]?.assigned_to) continue;
@@ -624,7 +647,7 @@ class SupabaseDataService {
       const vehicleCat = categorizeVehicle(b.vehicle_or_container, b.cargo_type);
 
       // STRICT: Only employees who have explicitly selected this vehicle category
-      const matchingEmps = activeEmps.filter((e) =>
+      let matchingEmps = activeEmps.filter((e) =>
         Array.isArray(e.assigned_vehicles) && e.assigned_vehicles.includes(vehicleCat as any)
       );
 
@@ -633,17 +656,53 @@ class SupabaseDataService {
         continue;
       }
 
+      // Check for Subtype-level specialization:
+      // If the lead specifies a subtype or weight (e.g. '1 MT', '10 MT', '20 MT', '32 Ft MXL', etc.)
+      const rawLeadSub = (b.vehicle_sub_type || b.weight || b.vehicle_or_container || '').toLowerCase();
+      const normLeadSub = rawLeadSub.replace(/[^a-z0-9]/g, '');
+
+      if (rawLeadSub && normLeadSub) {
+        // Find specialists whose assigned subtypes explicitly match the lead's subtype/capacity
+        const matchingSpecialists = matchingEmps.filter((e) => {
+          if (!e.assigned_subtypes || e.assigned_subtypes.length === 0) return false;
+          return e.assigned_subtypes.some((s) => {
+            const rawS = s.toLowerCase();
+            const normS = rawS.replace(/[^a-z0-9]/g, '');
+            return (
+              rawLeadSub.includes(rawS) ||
+              rawS.includes(rawLeadSub) ||
+              normLeadSub.includes(normS) ||
+              normS.includes(normLeadSub)
+            );
+          });
+        });
+
+        if (matchingSpecialists.length > 0) {
+          // Exact subtype match found! Prioritize specialists
+          matchingEmps = matchingSpecialists;
+        } else {
+          // Fall back to generalists (who haven't restricted their subtypes for this vehicle)
+          const generalists = matchingEmps.filter(
+            (e) => !e.assigned_subtypes || e.assigned_subtypes.length === 0
+          );
+          if (generalists.length > 0) {
+            matchingEmps = generalists;
+          }
+        }
+      }
+
       // Pick employee with lowest current workload among valid vehicle specialists
       matchingEmps.sort((a, b) => (loadMap.get(a.employee_id) || 0) - (loadMap.get(b.employee_id) || 0));
       const chosenEmp = matchingEmps[0];
 
       if (chosenEmp) {
         await this.assignLead(b.user_id, chosenEmp.employee_id);
+        const subNote = b.vehicle_sub_type ? ` - ${b.vehicle_sub_type}` : '';
         updated[b.user_id] = {
           user_id: b.user_id,
           assigned_to: chosenEmp.employee_id,
           assigned_at: new Date().toISOString(),
-          transfer_note: `Auto-Assigned by Vehicle (${vehicleCat})`,
+          transfer_note: `Auto-Assigned by Vehicle (${vehicleCat}${subNote})`,
         };
         loadMap.set(chosenEmp.employee_id, (loadMap.get(chosenEmp.employee_id) || 0) + 1);
         assignedCount++;
@@ -670,6 +729,34 @@ class SupabaseDataService {
   }
 
   // --- LEAD ASSIGNMENTS ---
+  async getAssignments(): Promise<Record<string, LeadAssignment>> {
+    const local = this.getLocalAssignments();
+    try {
+      const { data, error } = await this.client
+        .from('lead_status')
+        .select('user_id, assigned_to, assigned_at, transferred_from, transfer_note')
+        .not('assigned_to', 'is', null);
+
+      if (!error && data) {
+        const merged: Record<string, LeadAssignment> = { ...local };
+        for (const row of data as any[]) {
+          if (row.user_id && row.assigned_to) {
+            merged[row.user_id] = {
+              user_id: row.user_id,
+              assigned_to: row.assigned_to,
+              assigned_at: row.assigned_at || new Date().toISOString(),
+              transferred_from: row.transferred_from,
+              transfer_note: row.transfer_note,
+            };
+          }
+        }
+        localStorage.setItem('traket_assignments', JSON.stringify(merged));
+        return merged;
+      }
+    } catch {}
+    return local;
+  }
+
   getLocalAssignments(): Record<string, LeadAssignment> {
     try {
       const stored = localStorage.getItem('traket_assignments');

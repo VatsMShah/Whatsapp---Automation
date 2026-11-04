@@ -28,6 +28,11 @@ import {
   CheckSquare,
   Square,
   Package,
+  ChevronDown,
+  ChevronUp,
+  Sliders,
+  Tag,
+  Trash2,
 } from 'lucide-react';
 import { Employee, FreightBooking, LeadAssignment, TRAKET_VEHICLES, TraketVehicleType } from '../../types';
 
@@ -66,6 +71,7 @@ const emptyForm = (nextId = ''): Omit<Employee, 'id' | 'created_at'> => ({
   password: '',
   is_active: true,
   assigned_vehicles: ['Truck', 'Tempo'], // default vehicle types provided by Traket
+  assigned_subtypes: [],
 });
 
 export const TeamManager: React.FC<TeamManagerProps> = ({
@@ -87,6 +93,19 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
   const [isTriggeringAuto, setIsTriggeringAuto] = useState(false);
+  const [customSubtypeInputs, setCustomSubtypeInputs] = useState<Record<string, string>>({});
+  const [customSubtypesByVehicle, setCustomSubtypesByVehicle] = useState<Record<string, string[]>>(() => {
+    try {
+      const saved = localStorage.getItem('traket_custom_subtypes');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [expandedVehicles, setExpandedVehicles] = useState<Record<string, boolean>>({
+    Truck: true,
+    Tempo: true,
+  });
 
   // Count leads per employee
   const leadsPerEmployee = (employeeId: string) => {
@@ -106,6 +125,8 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
     setEditingEmployee(null);
     setForm(emptyForm(nextId));
     setShowPassword(false);
+    setCustomSubtypeInputs({});
+    setExpandedVehicles({ Truck: true, Tempo: true });
     setShowForm(true);
   };
 
@@ -121,7 +142,42 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
       password: emp.password || '',
       is_active: emp.is_active,
       assigned_vehicles: emp.assigned_vehicles || [],
+      assigned_subtypes: emp.assigned_subtypes || [],
     });
+    const exp: Record<string, boolean> = {};
+    (emp.assigned_vehicles || []).forEach((v) => {
+      exp[v] = true;
+    });
+    setExpandedVehicles(exp);
+    setCustomSubtypeInputs({});
+
+    // Ensure any custom subtypes stored on the employee are visible in customSubtypesByVehicle
+    if (emp.assigned_subtypes && emp.assigned_subtypes.length > 0) {
+      setCustomSubtypesByVehicle((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        const allBuiltinIds = new Set(
+          TRAKET_VEHICLES.flatMap((v) => v.subtypes.map((s) => s.id))
+        );
+        const assignedVehs = emp.assigned_vehicles || [];
+        const defaultVeh = assignedVehs.length === 1 ? assignedVehs[0] : 'Truck';
+
+        emp.assigned_subtypes?.forEach((st) => {
+          if (!allBuiltinIds.has(st)) {
+            const list = next[defaultVeh] || [];
+            if (!list.includes(st)) {
+              next[defaultVeh] = [...list, st];
+              changed = true;
+            }
+          }
+        });
+        if (changed) {
+          localStorage.setItem('traket_custom_subtypes', JSON.stringify(next));
+        }
+        return next;
+      });
+    }
+
     setShowPassword(false);
     setShowForm(true);
   };
@@ -130,11 +186,121 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
     setForm((prev) => {
       const current = prev.assigned_vehicles || [];
       const exists = current.includes(vehicleId);
+      if (exists) {
+        const vehicleDef = TRAKET_VEHICLES.find((v) => v.id === vehicleId);
+        const subIds = new Set([
+          ...(vehicleDef?.subtypes.map((s) => s.id) || []),
+          ...(customSubtypesByVehicle[vehicleId] || []),
+        ]);
+        return {
+          ...prev,
+          assigned_vehicles: current.filter((v) => v !== vehicleId),
+          assigned_subtypes: (prev.assigned_subtypes || []).filter((s) => !subIds.has(s)),
+        };
+      } else {
+        setExpandedVehicles((exp) => ({ ...exp, [vehicleId]: true }));
+        return {
+          ...prev,
+          assigned_vehicles: [...current, vehicleId],
+        };
+      }
+    });
+  };
+
+  const toggleSubtype = (subtypeId: string, vehicleId?: string) => {
+    setForm((prev) => {
+      const current = prev.assigned_subtypes || [];
+      const exists = current.includes(subtypeId);
+      let newSubs = exists
+        ? current.filter((s) => s !== subtypeId)
+        : [...current, subtypeId];
+
+      // If checking a subtype for a vehicle that isn't checked, also check the vehicle
+      let newVehs = prev.assigned_vehicles || [];
+      if (!exists && vehicleId && !newVehs.includes(vehicleId)) {
+        newVehs = [...newVehs, vehicleId];
+      }
+
       return {
         ...prev,
-        assigned_vehicles: exists ? current.filter((v) => v !== vehicleId) : [...current, vehicleId],
+        assigned_vehicles: newVehs,
+        assigned_subtypes: newSubs,
       };
     });
+  };
+
+  const selectVehicleAllSubtypes = (vehicleId: string) => {
+    const vDef = TRAKET_VEHICLES.find((v) => v.id === vehicleId);
+    if (!vDef) return;
+    const builtInIds = vDef.subtypes.map((s) => s.id);
+    const customIds = customSubtypesByVehicle[vehicleId] || [];
+    const allIds = [...builtInIds, ...customIds];
+    setForm((prev) => {
+      const currentVehs = prev.assigned_vehicles || [];
+      const newVehs = currentVehs.includes(vehicleId) ? currentVehs : [...currentVehs, vehicleId];
+      return {
+        ...prev,
+        assigned_vehicles: newVehs,
+        assigned_subtypes: Array.from(new Set([...(prev.assigned_subtypes || []), ...allIds])),
+      };
+    });
+  };
+
+  const clearVehicleSubtypes = (vehicleId: string) => {
+    const vDef = TRAKET_VEHICLES.find((v) => v.id === vehicleId);
+    if (!vDef) return;
+    const builtInIds = new Set(vDef.subtypes.map((s) => s.id));
+    const customIds = new Set(customSubtypesByVehicle[vehicleId] || []);
+    setForm((prev) => ({
+      ...prev,
+      assigned_subtypes: (prev.assigned_subtypes || []).filter(
+        (s) => !builtInIds.has(s) && !customIds.has(s)
+      ),
+    }));
+  };
+
+  const handleAddCustomSubtype = (vehicleId: string) => {
+    const inputVal = (customSubtypeInputs[vehicleId] || '').trim();
+    if (!inputVal) return;
+
+    // Persist in customSubtypesByVehicle
+    setCustomSubtypesByVehicle((prev) => {
+      const list = prev[vehicleId] || [];
+      if (list.includes(inputVal)) return prev;
+      const updated = { ...prev, [vehicleId]: [...list, inputVal] };
+      localStorage.setItem('traket_custom_subtypes', JSON.stringify(updated));
+      return updated;
+    });
+
+    // Select for current form & ensure vehicle is checked
+    setForm((prev) => {
+      const currentSubs = prev.assigned_subtypes || [];
+      const currentVehs = prev.assigned_vehicles || [];
+      const newVehs = currentVehs.includes(vehicleId) ? currentVehs : [...currentVehs, vehicleId];
+      return {
+        ...prev,
+        assigned_vehicles: newVehs,
+        assigned_subtypes: currentSubs.includes(inputVal) ? currentSubs : [...currentSubs, inputVal],
+      };
+    });
+
+    setCustomSubtypeInputs((prev) => ({ ...prev, [vehicleId]: '' }));
+  };
+
+  const handleRemoveCustomSubtype = (vehicleId: string, subtypeName: string) => {
+    // Remove from custom list
+    setCustomSubtypesByVehicle((prev) => {
+      const list = prev[vehicleId] || [];
+      const updated = { ...prev, [vehicleId]: list.filter((s) => s !== subtypeName) };
+      localStorage.setItem('traket_custom_subtypes', JSON.stringify(updated));
+      return updated;
+    });
+
+    // Unselect from form
+    setForm((prev) => ({
+      ...prev,
+      assigned_subtypes: (prev.assigned_subtypes || []).filter((s) => s !== subtypeName),
+    }));
   };
 
   const selectDomestic = () => {
@@ -164,6 +330,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
     setForm((prev) => ({
       ...prev,
       assigned_vehicles: [],
+      assigned_subtypes: [],
     }));
   };
 
@@ -220,6 +387,242 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
     return activeEmployees.filter(
       (e) => e.assigned_vehicles && e.assigned_vehicles.includes(vehicleId)
     ).length;
+  };
+
+  const renderVehicleCard = (vehicle: (typeof TRAKET_VEHICLES)[0]) => {
+    const isSelected = (form.assigned_vehicles || []).includes(vehicle.id);
+    const isExpanded = !!expandedVehicles[vehicle.id];
+    const customSubs = customSubtypesByVehicle[vehicle.id] || [];
+    const allSubIds = [...vehicle.subtypes.map((s) => s.id), ...customSubs];
+    const selectedSubs = (form.assigned_subtypes || []).filter((s) => allSubIds.includes(s));
+
+    return (
+      <div
+        key={vehicle.id}
+        className={`rounded-xl border transition overflow-hidden ${
+          isSelected
+            ? 'border-blue-300 bg-white shadow-xs'
+            : 'border-slate-200 bg-slate-50/60 opacity-80 hover:opacity-100'
+        }`}
+      >
+        {/* Vehicle Card Header */}
+        <div
+          className={`p-3 flex items-center justify-between cursor-pointer transition select-none ${
+            isSelected ? 'bg-blue-50/60 hover:bg-blue-50/90' : 'hover:bg-slate-100/70'
+          }`}
+          onClick={() => toggleVehicle(vehicle.id)}
+        >
+          <div className="flex items-center space-x-2.5 min-w-0 flex-1 pr-2">
+            <div className="shrink-0 text-blue-600">
+              {isSelected ? (
+                <CheckSquare className="w-4 h-4 text-blue-600" />
+              ) : (
+                <Square className="w-4 h-4 text-slate-300" />
+              )}
+            </div>
+            <span className="text-xl shrink-0">{vehicle.icon}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                <span className="font-bold text-xs text-slate-900">{vehicle.label}</span>
+                {isSelected && (
+                  selectedSubs.length === 0 ? (
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      ⚡ All Capacities
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                      🎯 {selectedSubs.length} Subtype{selectedSubs.length > 1 ? 's' : ''} Selected
+                    </span>
+                  )
+                )}
+              </div>
+              <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5">
+                {vehicle.desc}
+              </p>
+            </div>
+          </div>
+
+          {/* Expand / Collapse Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpandedVehicles((prev) => ({ ...prev, [vehicle.id]: !isExpanded }));
+            }}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-white/90 border border-transparent hover:border-slate-200 transition shrink-0 ml-1 flex items-center space-x-1"
+            title={isExpanded ? 'Collapse subtypes' : 'Customize subtypes'}
+          >
+            <span className="text-[10px] font-medium hidden sm:inline text-slate-500">
+              {isExpanded ? 'Hide Subtypes' : 'Configure Subtypes'}
+            </span>
+            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* Expanded Subtypes Manager */}
+        {isExpanded && (
+          <div className="p-3 bg-slate-50/90 border-t border-slate-200/90 space-y-3">
+            {/* Quick Toolbar */}
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-slate-700 flex items-center space-x-1">
+                <Sliders className="w-3.5 h-3.5 text-blue-600" />
+                <span>Capacities & Sizes for {vehicle.label}:</span>
+              </span>
+              <div className="flex items-center space-x-1 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => selectVehicleAllSubtypes(vehicle.id)}
+                  className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-blue-700 border border-slate-200 font-semibold shadow-2xs"
+                >
+                  Select All ({allSubIds.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearVehicleSubtypes(vehicle.id)}
+                  className="px-2 py-0.5 rounded bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 font-medium"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            {/* Built-in Subtypes Grid (from WhatsApp bot flow) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {vehicle.subtypes.map((sub) => {
+                const isSubSelected = (form.assigned_subtypes || []).includes(sub.id);
+                return (
+                  <button
+                    type="button"
+                    key={sub.id}
+                    onClick={() => toggleSubtype(sub.id, vehicle.id)}
+                    className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between ${
+                      isSubSelected
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-400/40'
+                        : 'bg-white text-slate-700 hover:bg-blue-50/40 hover:border-blue-200 border-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="font-extrabold text-xs">{sub.label}</span>
+                      {isSubSelected ? (
+                        <CheckSquare className="w-3.5 h-3.5 text-white shrink-0" />
+                      ) : (
+                        <Square className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                      )}
+                    </div>
+                    {sub.size && (
+                      <span
+                        className={`text-[10px] mt-1 font-mono font-medium ${
+                          isSubSelected ? 'text-blue-100' : 'text-slate-600'
+                        }`}
+                      >
+                        📏 {sub.size}
+                      </span>
+                    )}
+                    {sub.desc && (
+                      <span
+                        className={`text-[9px] mt-0.5 line-clamp-1 ${
+                          isSubSelected ? 'text-blue-200' : 'text-slate-400'
+                        }`}
+                      >
+                        {sub.desc}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Custom Subtypes Section (if any created) */}
+            {customSubs.length > 0 && (
+              <div className="space-y-1.5 pt-2 border-t border-slate-200/70">
+                <div className="text-[10px] font-bold uppercase text-slate-500 flex items-center space-x-1">
+                  <Tag className="w-3 h-3 text-indigo-500" />
+                  <span>Custom Subtypes Added ({customSubs.length}):</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {customSubs.map((cSub) => {
+                    const isCSubSelected = (form.assigned_subtypes || []).includes(cSub);
+                    return (
+                      <div
+                        key={cSub}
+                        onClick={() => toggleSubtype(cSub, vehicle.id)}
+                        className={`px-2.5 py-1 rounded-lg border text-xs cursor-pointer flex items-center space-x-1.5 transition ${
+                          isCSubSelected
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-1 ring-indigo-300'
+                            : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-300'
+                        }`}
+                      >
+                        <span className="font-bold">{cSub}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveCustomSubtype(vehicle.id, cSub);
+                          }}
+                          className={`ml-1 hover:text-rose-400 p-0.5 rounded transition ${
+                            isCSubSelected ? 'text-indigo-200 hover:text-white' : 'text-slate-400 hover:text-rose-600'
+                          }`}
+                          title={`Delete custom subtype "${cSub}"`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Add Custom Subtype Bar */}
+            <div className="flex items-center space-x-1.5 pt-2 border-t border-slate-200/70">
+              <div className="relative flex-1">
+                <Tag className="w-3 h-3 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder={`+ Add custom subtype for ${vehicle.label} (e.g. 20 MT, 32ft MXL)...`}
+                  value={customSubtypeInputs[vehicle.id] || ''}
+                  onChange={(e) =>
+                    setCustomSubtypeInputs({ ...customSubtypeInputs, [vehicle.id]: e.target.value })
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCustomSubtype(vehicle.id);
+                    }
+                  }}
+                  className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-lg placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => handleAddCustomSubtype(vehicle.id)}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shrink-0 flex items-center space-x-1 transition shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add</span>
+              </button>
+            </div>
+
+            {/* Routing Note Footer */}
+            {selectedSubs.length === 0 ? (
+              <div className="text-[10px] text-slate-600 italic bg-white/80 p-2 rounded-lg border border-slate-200 flex items-center space-x-1.5">
+                <span>⚡</span>
+                <span>
+                  <strong>Generalist:</strong> Receives all incoming leads for <strong>{vehicle.label}</strong>. Select specific subtypes above to restrict to particular capacities.
+                </span>
+              </div>
+            ) : (
+              <div className="text-[10px] text-blue-900 bg-blue-50 p-2 rounded-lg border border-blue-200 flex items-center space-x-1.5">
+                <span>🎯</span>
+                <span>
+                  <strong>Specialist:</strong> Prioritized for leads matching: <strong>{selectedSubs.join(', ')}</strong>.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -316,7 +719,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
             <span>Specialists by Vehicle Category</span>
             <span className="text-[10px] text-slate-400">Strict Auto-Routing: Truck specialists only receive Truck leads</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
             {TRAKET_VEHICLES.map((v) => {
               const count = getSpecialistCount(v.id);
               return (
@@ -437,26 +840,53 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                     </div>
                   </div>
 
-                  {/* Vehicle Specialization Badges */}
+                  {/* Vehicle & Subtype Specialization Badges */}
                   <div className="mt-3 pt-3 border-t border-slate-100">
                     <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center justify-between">
-                      <span>Assigned Vehicles:</span>
+                      <span>Assigned Vehicles & Subtypes:</span>
                       <span className="text-[9px] text-blue-600 font-semibold">
                         {vehicles.length} vehicle type{vehicles.length !== 1 ? 's' : ''}
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="space-y-1.5">
                       {vehicles.length > 0 ? (
                         vehicles.map((v) => {
                           const info = TRAKET_VEHICLES.find((tv) => tv.id === v);
+                          const vSubtypeIds = info?.subtypes.map((s) => s.id) || [];
+                          const customSubs = customSubtypesByVehicle[v] || [];
+                          const allSubIds = [...vSubtypeIds, ...customSubs];
+                          const selectedSubs = (emp.assigned_subtypes || []).filter((s) =>
+                            allSubIds.includes(s) || (vehicles.length === 1 && !TRAKET_VEHICLES.flatMap((x) => x.subtypes.map((y) => y.id)).includes(s))
+                          );
+
                           return (
-                            <span
-                              key={v}
-                              className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-50 text-blue-800 border border-blue-200"
-                            >
-                              <span>{info?.icon || '🚛'}</span>
-                              <span>{v}</span>
-                            </span>
+                            <div key={v} className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                              <div className="flex items-center justify-between font-bold text-slate-800">
+                                <span className="flex items-center space-x-1.5 text-[11px]">
+                                  <span>{info?.icon || '🚛'}</span>
+                                  <span>{v}</span>
+                                </span>
+                                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800">
+                                  {selectedSubs.length > 0 ? `${selectedSubs.length} Subtype${selectedSubs.length > 1 ? 's' : ''}` : 'All Capacities'}
+                                </span>
+                              </div>
+                              {selectedSubs.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                  {selectedSubs.map((sub) => (
+                                    <span
+                                      key={sub}
+                                      className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-white border border-slate-300 text-slate-700 shadow-2xs"
+                                    >
+                                      {sub}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-slate-400 italic mt-0.5">
+                                  Generalist (all sizes & capacities)
+                                </div>
+                              )}
+                            </div>
                           );
                         })
                       ) : (
@@ -605,7 +1035,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
       {/* Add / Edit Modal with Vehicle Management Option */}
       {showForm && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl max-h-[92vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-extrabold text-slate-900 flex items-center space-x-2">
@@ -775,78 +1205,28 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                 </div>
 
                 {/* Group 1: Domestic Fleet */}
-                <div className="space-y-1.5 pt-1">
-                  <div className="text-[11px] font-bold text-slate-800 flex items-center space-x-1.5">
-                    <span>🚛 Domestic Fleet (Road Logistics)</span>
+                <div className="space-y-2 pt-1">
+                  <div className="text-[11px] font-bold text-slate-800 flex items-center justify-between">
+                    <span className="flex items-center space-x-1.5">
+                      <span>🚛 Domestic Fleet (Road Logistics)</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-normal">Click arrow to configure capacities</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {TRAKET_VEHICLES.filter((v) => (v as any).group === 'Domestic').map((vehicle) => {
-                      const isSelected = (form.assigned_vehicles || []).includes(vehicle.id);
-                      return (
-                        <div
-                          key={vehicle.id}
-                          onClick={() => toggleVehicle(vehicle.id)}
-                          className={`p-2.5 rounded-xl border text-left cursor-pointer transition flex items-start space-x-2 ${
-                            isSelected
-                              ? 'bg-blue-50/90 border-blue-500 text-blue-950 ring-1 ring-blue-500/30 shadow-xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span className="text-xl shrink-0 mt-0.5">{vehicle.icon}</span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-xs">{vehicle.label}</span>
-                              {isSelected ? (
-                                <CheckSquare className="w-3.5 h-3.5 text-blue-600 shrink-0 ml-1" />
-                              ) : (
-                                <Square className="w-3.5 h-3.5 text-slate-300 shrink-0 ml-1" />
-                              )}
-                            </div>
-                            <span className="text-[10px] text-slate-500 line-clamp-1 mt-0.5 block">
-                              {vehicle.desc}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="space-y-2">
+                    {TRAKET_VEHICLES.filter((v) => (v as any).group === 'Domestic').map(renderVehicleCard)}
                   </div>
                 </div>
 
                 {/* Group 2: EXIM & FCL Container Fleet */}
-                <div className="space-y-1.5 pt-2">
-                  <div className="text-[11px] font-bold text-slate-800 flex items-center space-x-1.5">
-                    <span>🚢 EXIM & Container Fleet (Port / CFS Logistics)</span>
+                <div className="space-y-2 pt-2">
+                  <div className="text-[11px] font-bold text-slate-800 flex items-center justify-between">
+                    <span className="flex items-center space-x-1.5">
+                      <span>🚢 EXIM & Container Fleet (Port / CFS Logistics)</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-normal">Click arrow to configure capacities</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {TRAKET_VEHICLES.filter((v) => (v as any).group === 'EXIM / FCL').map((vehicle) => {
-                      const isSelected = (form.assigned_vehicles || []).includes(vehicle.id);
-                      return (
-                        <div
-                          key={vehicle.id}
-                          onClick={() => toggleVehicle(vehicle.id)}
-                          className={`p-2.5 rounded-xl border text-left cursor-pointer transition flex items-start space-x-2 ${
-                            isSelected
-                              ? 'bg-indigo-50/90 border-indigo-500 text-indigo-950 ring-1 ring-indigo-500/30 shadow-xs'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span className="text-xl shrink-0 mt-0.5">{vehicle.icon}</span>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-xs">{vehicle.label}</span>
-                              {isSelected ? (
-                                <CheckSquare className="w-3.5 h-3.5 text-indigo-600 shrink-0 ml-1" />
-                              ) : (
-                                <Square className="w-3.5 h-3.5 text-slate-300 shrink-0 ml-1" />
-                              )}
-                            </div>
-                            <span className="text-[10px] text-slate-500 line-clamp-1 mt-0.5 block">
-                              {vehicle.desc}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="space-y-2">
+                    {TRAKET_VEHICLES.filter((v) => (v as any).group === 'EXIM / FCL').map(renderVehicleCard)}
                   </div>
                 </div>
 

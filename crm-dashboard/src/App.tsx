@@ -84,7 +84,7 @@ function AppInner() {
       setSupportTickets(t || []);
       setEmployees(emps || []);
 
-      let currentAssignments = dbService.getLocalAssignments();
+      let currentAssignments = await dbService.getAssignments();
 
       // If vehicle auto-lead assignment is enabled, auto-assign unassigned leads based on vehicle type
       if (b && b.length > 0 && emps && emps.length > 0 && dbService.isAutoLeadAssignmentEnabled()) {
@@ -111,21 +111,22 @@ function AppInner() {
     currentRole: string,
     activeEmployee: Employee | null
   ) => {
-    // Lead notifications are strictly for employees, not the admin panel
-    if (currentRole === 'admin' || !activeEmployee) {
-      setNotifications([]);
-      setActiveDispatchAlert(null);
-      return;
+    // 1. Identify relevant leads based on active role
+    let relevantBookings: FreightBooking[] = [];
+    let roleKey = 'admin';
+
+    if (currentRole === 'employee' && activeEmployee) {
+      roleKey = activeEmployee.employee_id;
+      relevantBookings = currentBookings.filter((b) => {
+        if (b.status !== 'new') return false;
+        const assignment = currentAssignments[b.user_id];
+        return assignment && assignment.assigned_to === activeEmployee.employee_id;
+      });
+    } else {
+      // In Admin view, track all new leads requiring dispatch or attention
+      relevantBookings = currentBookings.filter((b) => b.status === 'new');
     }
 
-    // 1. Identify relevant new leads assigned to this employee
-    const relevantBookings = currentBookings.filter((b) => {
-      if (b.status !== 'new') return false;
-      const assignment = currentAssignments[b.user_id];
-      return assignment && assignment.assigned_to === activeEmployee.employee_id;
-    });
-
-    const roleKey = activeEmployee.employee_id;
     const storageKey = GET_ALERT_STORAGE_KEY(roleKey);
     let seenIds: string[] = [];
     try {
@@ -139,7 +140,7 @@ function AppInner() {
       return {
         id: `alert_${b.user_id}`,
         bookingId: b.user_id,
-        title: isOverdue ? 'Overdue Lead Follow-up' : 'New Freight Booking',
+        title: isOverdue ? 'Overdue Lead Follow-up' : (assignment?.assigned_to ? 'Assigned Lead' : 'New Freight Booking'),
         customerName: b.contact_name || 'Inquiry Contact',
         phone: b.phone,
         companyName: b.company_name,
@@ -154,6 +155,10 @@ function AppInner() {
         status: 'pending',
         urgency: isOverdue ? 'urgent' : 'high',
         type: isOverdue ? 'sla_reminder' : 'new_lead',
+        isDecisionMaker: b.is_decision_maker,
+        approverName: b.approver_name,
+        approverPhone: b.approver_phone,
+        approverRole: b.approver_role,
       };
     });
 
@@ -170,30 +175,32 @@ function AppInner() {
       return;
     }
 
-    // For any fresh leads arriving after initial load, pop up the Priority Blur Alert!
-    const unseen = mapped.find((m) => !seenIds.includes(m.bookingId));
-    if (unseen && !activeDispatchAlert) {
-      setActiveDispatchAlert(unseen);
+    // For any fresh leads arriving after initial load, pop up the Priority Blur Alert for employees
+    if (currentRole === 'employee' && activeEmployee) {
+      const unseen = mapped.find((m) => !seenIds.includes(m.bookingId));
+      if (unseen && !activeDispatchAlert) {
+        setActiveDispatchAlert(unseen);
 
-      // Record as seen in this browser so it doesn't pop up again endlessly
-      try {
-        localStorage.setItem(storageKey, JSON.stringify([...seenIds, unseen.bookingId]));
-      } catch (_) {}
+        // Record as seen in this browser so it doesn't pop up again endlessly
+        try {
+          localStorage.setItem(storageKey, JSON.stringify([...seenIds, unseen.bookingId]));
+        } catch (_) {}
 
-      // Play audio chime and voice announcement
-      playDispatchChime();
-      const originCity = (unseen.origin || 'Source').split(',')[0].trim();
-      const destCity = (unseen.destination || 'Destination').split(',')[0].trim();
-      speakLeadAnnouncement(`New lead assigned from ${originCity} to ${destCity}.`);
+        // Play audio chime and voice announcement
+        playDispatchChime();
+        const originCity = (unseen.origin || 'Source').split(',')[0].trim();
+        const destCity = (unseen.destination || 'Destination').split(',')[0].trim();
+        speakLeadAnnouncement(`New lead assigned from ${originCity} to ${destCity}.`);
 
-      // Browser Desktop Push Notification (works even if user is on another tab)
-      try {
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('🚨 New Lead Assigned - Traket CRM', {
-            body: `${unseen.customerName}: ${originCity} ➔ ${destCity} (${unseen.vehicleType})`,
-          });
-        }
-      } catch (_) {}
+        // Browser Desktop Push Notification (works even if user is on another tab)
+        try {
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('🚨 New Lead Assigned - Traket CRM', {
+              body: `${unseen.customerName}: ${originCity} ➔ ${destCity} (${unseen.vehicleType})`,
+            });
+          }
+        } catch (_) {}
+      }
     }
   };
 
@@ -205,16 +212,12 @@ function AppInner() {
     return () => clearInterval(interval);
   }, []);
 
-  // When role or active employee changes, refresh notifications (strictly for employee view)
+  // When role or active employee changes, refresh notifications
   useEffect(() => {
-    if (role === 'admin') {
-      setNotifications([]);
-      setActiveDispatchAlert(null);
-      setIsNotificationDrawerOpen(false);
-    } else if (bookings.length > 0) {
+    if (bookings.length > 0) {
       syncLeadNotifications(bookings, assignments, role, currentEmployee);
     }
-  }, [role, currentEmployee]);
+  }, [role, currentEmployee, bookings, assignments]);
 
   // If employee switches to a tab they can't access, reset to orders
   useEffect(() => {
@@ -357,7 +360,8 @@ function AppInner() {
     const headers = [
       'Date', 'Status', 'Origin', 'Destination', 'Cargo Type',
       'Vehicle / Container', 'Weight', 'Loading Date', 'Time Slot',
-      'Contact Person', 'Primary Phone', 'Alternate Phone', 'Company Name', 'Remarks',
+      'Commercial Approver', 'Approver Phone', 'Approver Role', 'Authority Type',
+      'Lead Submitter', 'Submitter Phone', 'Company Name', 'Remarks',
     ];
 
     const rows = bookings.map((b) => [
@@ -370,9 +374,12 @@ function AppInner() {
       `"${b.weight}"`,
       `"${b.loading_date}"`,
       `"${b.time_slot}"`,
-      `"${b.contact_name}"`,
-      `"${b.phone}"`,
-      `"${b.alternate_phone || ''}"`,
+      `"${b.approver_name || b.contact_name || ''}"`,
+      `"${b.approver_phone || b.alternate_phone || b.phone || ''}"`,
+      `"${b.approver_role || ''}"`,
+      `"${b.is_decision_maker === false ? 'Corporate (On Behalf)' : 'Direct Decision-Maker (Self)'}"`,
+      `"${b.submitter_name || b.contact_name || ''}"`,
+      `"${b.submitter_phone || b.phone || ''}"`,
       `"${b.company_name}"`,
       `"${(b.remarks || '').replace(/"/g, '""')}"`,
     ]);
@@ -506,27 +513,23 @@ function AppInner() {
         </main>
       </div>
 
-      {/* 10-Second Priority Dispatch Full-Screen Blur Modal (Employee View Only) */}
-      {!isAdmin && (
-        <PriorityDispatchModal
-          notification={activeDispatchAlert}
-          onOpenLead={handleOpenLeadFromNotification}
-          onDockToTray={handleDockToTray}
-        />
-      )}
+      {/* 10-Second Priority Dispatch Full-Screen Blur Modal */}
+      <PriorityDispatchModal
+        notification={activeDispatchAlert}
+        onOpenLead={handleOpenLeadFromNotification}
+        onDockToTray={handleDockToTray}
+      />
 
-      {/* Notification Drawer (Pending Leads Tray - Employee View Only) */}
-      {!isAdmin && (
-        <NotificationDrawer
-          isOpen={isNotificationDrawerOpen}
-          onClose={() => setIsNotificationDrawerOpen(false)}
-          notifications={notifications}
-          onOpenLead={handleOpenLeadFromNotification}
-          onDismiss={handleDismissNotification}
-          onClearAll={handleClearAllNotifications}
-          onTriggerTestAlert={handleTriggerTestAlert}
-        />
-      )}
+      {/* Notification Drawer (Pending Leads Tray) */}
+      <NotificationDrawer
+        isOpen={isNotificationDrawerOpen}
+        onClose={() => setIsNotificationDrawerOpen(false)}
+        notifications={notifications}
+        onOpenLead={handleOpenLeadFromNotification}
+        onDismiss={handleDismissNotification}
+        onClearAll={handleClearAllNotifications}
+        onTriggerTestAlert={handleTriggerTestAlert}
+      />
     </div>
   );
 }
