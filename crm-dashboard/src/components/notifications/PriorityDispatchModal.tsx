@@ -45,7 +45,9 @@ export const PriorityDispatchModal: React.FC<PriorityDispatchModalProps> = ({
       setSecondsRemaining((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
-          dockRef.current(notification.id);
+          setTimeout(() => {
+            dockRef.current(notification.id);
+          }, 0);
           return 0;
         }
         return prev - 1;

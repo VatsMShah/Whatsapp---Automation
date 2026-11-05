@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Package,
   Calendar,
@@ -160,6 +160,98 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
 
     return matchesSearch && matchesStatus && matchesCargo && matchesApprover && matchesEmployee;
   });
+
+  // Helper to extract numeric timestamp for sorting leads date & time wise
+  const getBookingTimestamp = (bkg: FreightBooking): number => {
+    if (bkg.updated_at) {
+      const t = new Date(bkg.updated_at).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (bkg.user_id && bkg.user_id.includes('_')) {
+      const ts = parseInt(bkg.user_id.split('_')[1], 10);
+      if (!isNaN(ts) && ts > 1000000000) return ts;
+    }
+    const cleanNum = parseInt(bkg.user_id.replace(/\D/g, ''), 10);
+    if (!isNaN(cleanNum) && cleanNum > 1000000000) return cleanNum;
+    return 0;
+  };
+
+  // Helper to format lead submission date and time cleanly
+  const formatLeadDateTime = (updatedAt?: string, userId?: string) => {
+    let dateObj: Date | null = null;
+    if (updatedAt) {
+      const d = new Date(updatedAt);
+      if (!isNaN(d.getTime()) && d.getTime() > 0) dateObj = d;
+    }
+    if (!dateObj && userId && userId.includes('_')) {
+      const ts = parseInt(userId.split('_')[1], 10);
+      if (!isNaN(ts) && ts > 1000000000) dateObj = new Date(ts);
+    }
+    if (!dateObj && userId) {
+      const cleanNum = parseInt(userId.replace(/\D/g, ''), 10);
+      if (!isNaN(cleanNum) && cleanNum > 1000000000) dateObj = new Date(cleanNum);
+    }
+
+    if (!dateObj) {
+      return {
+        formattedDate: '—',
+        formattedTime: '—',
+        isRecent: false,
+        timeAgo: '',
+      };
+    }
+
+    const now = new Date();
+    const diffMs = now.getTime() - dateObj.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+    let timeAgo = '';
+    let isRecent = false;
+    if (diffMins < 60 && diffMins >= 0) {
+      timeAgo = `${Math.max(1, diffMins)}m ago`;
+      isRecent = true;
+    } else if (diffHours < 24 && diffHours >= 0) {
+      timeAgo = `${diffHours}h ago`;
+      isRecent = true;
+    }
+
+    const formattedDate = dateObj.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+
+    const formattedTime = dateObj.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    return {
+      formattedDate,
+      formattedTime,
+      isRecent,
+      timeAgo,
+      rawDate: dateObj,
+    };
+  };
+
+  // Sort bookings date & time wise: newest/recent on top, with new leads prioritized at the top
+  const sortedBookings = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      // 1. New leads prioritized at the very top if status differs
+      const isNewA = a.status === 'new';
+      const isNewB = b.status === 'new';
+      if (isNewA && !isNewB) return -1;
+      if (!isNewA && isNewB) return 1;
+
+      // 2. Strict Date and Time descending (newest / most recent first)
+      const timeA = getBookingTimestamp(a);
+      const timeB = getBookingTimestamp(b);
+      return timeB - timeA;
+    });
+  }, [filtered]);
 
   // Assignment helpers
   const getAssignedEmployee = (userId: string): Employee | undefined => {
@@ -357,6 +449,12 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
+                <th className="py-3 px-3.5 whitespace-nowrap">
+                  <div className="flex items-center space-x-1">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Date & Time</span>
+                  </div>
+                </th>
                 <th className="py-3 px-3.5 whitespace-nowrap">User ID</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">Commercial Approver (Decision-Maker)</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">Lead Submitter (Operations)</th>
@@ -372,9 +470,9 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {filtered.length === 0 ? (
+              {sortedBookings.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-12 text-center text-slate-500">
+                  <td colSpan={13} className="py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center space-y-2">
                       <Package className="w-8 h-8 text-slate-400" />
                       <p className="font-semibold text-slate-700">No freight orders found</p>
@@ -385,10 +483,10 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                   </td>
                 </tr>
               ) : (
-                filtered.map((b) => {
+                sortedBookings.map((b) => {
                   const badge = getStatusBadge(b.status);
                   const shortId = extractShortId(b.user_id);
-
+                  const dtInfo = formatLeadDateTime(b.updated_at, b.user_id);
                   const isHighlighted = activeGlowId === b.user_id;
 
                   return (
@@ -398,10 +496,34 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                       className={`transition duration-200 group ${
                         isHighlighted
                           ? 'bg-blue-100/70 ring-2 ring-blue-500 shadow-md font-medium'
+                          : b.status === 'new'
+                          ? 'hover:bg-blue-50/50 bg-blue-50/15'
                           : 'hover:bg-slate-50/80'
                       }`}
                     >
-                      {/* 1. User ID (Clean without hashtag) */}
+                      {/* 1. Date & Time */}
+                      <td className="py-3.5 px-3.5 whitespace-nowrap">
+                        <div className="flex items-start space-x-2">
+                          <div className="p-1 rounded bg-slate-100 text-slate-500 mt-0.5 shrink-0">
+                            <Clock className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <div className="font-bold text-slate-900 text-xs flex items-center space-x-1.5">
+                              <span>{dtInfo.formattedDate}</span>
+                              {dtInfo.isRecent && dtInfo.timeAgo && (
+                                <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-300">
+                                  {dtInfo.timeAgo}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] font-medium text-slate-500 font-mono mt-0.5">
+                              {dtInfo.formattedTime}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 2. User ID (Clean without hashtag) */}
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
                         <span className="font-mono text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/80 inline-block">
                           {shortId}
