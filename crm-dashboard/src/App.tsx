@@ -5,6 +5,7 @@ import { DashboardOverview } from './components/dashboard/DashboardOverview';
 import { BookingsTable } from './components/tables/BookingsTable';
 import { InquiriesDesk } from './components/inquiries/InquiriesDesk';
 import { TeamManager } from './components/team/TeamManager';
+import { ArchiveDesk } from './components/archive/ArchiveDesk';
 import { PriorityDispatchModal } from './components/notifications/PriorityDispatchModal';
 import { NotificationDrawer } from './components/notifications/NotificationDrawer';
 import { RoleProvider, useRole } from './context/RoleContext';
@@ -419,6 +420,11 @@ function AppInner() {
           title: 'Team Management',
           subtitle: 'Manage employees, assign leads, and track team performance',
         };
+      case 'archive':
+        return {
+          title: 'Data Archive & Statements',
+          subtitle: 'Bank-style periodic statements, audited ledger, and month-wise backup archives',
+        };
       default:
         return {
           title: 'Traket Logistics Desk',
@@ -509,6 +515,18 @@ function AppInner() {
               isAutoAssignEnabled={isAutoLeadEnabled}
               onToggleAutoAssign={handleToggleAutoLead}
               onTriggerAutoAssign={handleTriggerAutoAssign}
+            />
+          )}
+
+          {currentTab === 'archive' && isAdmin && (
+            <ArchiveDesk
+              bookings={bookings}
+              sessions={sessions}
+              supportTickets={supportTickets}
+              employees={employees}
+              assignments={assignments}
+              onRefresh={loadData}
+              isRefreshing={isRefreshing}
             />
           )}
         </main>

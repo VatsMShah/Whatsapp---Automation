@@ -1,4 +1,6 @@
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 const db = require('./services/supabase');
 const config = require('./config');
 const logger = require('./utils/logger');
@@ -100,6 +102,62 @@ async function syncAllToSheet() {
       rows,
     };
     logger.info(`✔ Loaded ${rows.length} records for "${item.tabTitle}".`);
+
+    // Month-wise backup partitioning for Freight Bookings & Inquiries
+    if (item.table === 'book_vehicle' && rows.length > 0) {
+      const monthGroups = {};
+      rows.forEach((r) => {
+        let monthKey = 'Historical';
+        if (r.updated_at) {
+          const d = new Date(r.updated_at);
+          if (!isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            monthKey = `${y}_${m}`;
+          }
+        }
+        if (!monthGroups[monthKey]) monthGroups[monthKey] = [];
+        monthGroups[monthKey].push(r);
+      });
+
+      // Prepare local backup directory
+      const backupDir = path.join(__dirname, '../backups/monthly');
+      try {
+        if (!fs.existsSync(backupDir)) {
+          fs.mkdirSync(backupDir, { recursive: true });
+        }
+      } catch (e) {
+        logger.warn('Could not create backup directory:', e.message);
+      }
+
+      for (const [mKey, mRows] of Object.entries(monthGroups)) {
+        const archiveTab = `Archive_${mKey}`;
+        tablesPayload[archiveTab] = {
+          headers,
+          rows: mRows,
+        };
+        logger.info(`📁 Partitioned ${mRows.length} records into month backup tab "${archiveTab}".`);
+
+        // Save local CSV file for extra safety
+        try {
+          const csvLines = [headers.map((h) => `"${h}"`).join(',')];
+          mRows.forEach((r) => {
+            const rowVals = headers.map((h) => {
+              const val = r[h];
+              if (val === undefined || val === null) return '""';
+              const str = typeof val === 'object' ? JSON.stringify(val) : String(val);
+              return `"${str.replace(/"/g, '""')}"`;
+            });
+            csvLines.push(rowVals.join(','));
+          });
+          const localCsvPath = path.join(backupDir, `TRAKET_BACKUP_${mKey}.csv`);
+          fs.writeFileSync(localCsvPath, csvLines.join('\n'), 'utf8');
+          logger.info(`💾 Saved local month backup file: backups/monthly/TRAKET_BACKUP_${mKey}.csv`);
+        } catch (csvErr) {
+          logger.warn(`Could not save local CSV backup for ${mKey}:`, csvErr.message);
+        }
+      }
+    }
   }
 
   logger.info('📤 Sending full database payload to Google Sheet Webhook...');

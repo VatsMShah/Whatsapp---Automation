@@ -62,7 +62,7 @@ export interface ClientCompanyProfile {
   supabaseUrl: string;
 }
 
-export type DashboardTab = 'orders' | 'overview' | 'inquiries' | 'team';
+export type DashboardTab = 'orders' | 'overview' | 'inquiries' | 'team' | 'archive';
 
 export interface Employee {
   id: string;           // UUID primary key
