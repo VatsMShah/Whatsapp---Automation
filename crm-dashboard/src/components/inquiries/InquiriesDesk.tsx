@@ -254,8 +254,14 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
     setSessionAssignments((prev) => ({ ...prev, [userId]: updated }));
   };
 
-  // Open modal for a specific session and stage
+  // Open modal for a specific session and stage (only permitted inside 24h Meta window)
   const openReminderModal = (s: SessionRecord, stage: 1 | 2 | 3 = 1) => {
+    const win = getWindowInfo(s.updated_at);
+    if (!win.isOpen) {
+      alert('The 24-hour Meta messaging window for this customer has expired. WhatsApp session reminders are disabled. Please use Direct Call.');
+      return;
+    }
+
     setModalSession(s);
     setSelectedStage(stage);
     setModalError(null);
@@ -787,15 +793,23 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
 
                           {/* Stage 1 Pill */}
                           <div
-                            onClick={() => openReminderModal(s, 1)}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border flex items-center space-x-1.5 cursor-pointer transition ${
-                              log.r1_sent_at
+                            onClick={() => windowInfo.isOpen && openReminderModal(s, 1)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border flex items-center space-x-1.5 transition ${
+                              !windowInfo.isOpen
+                                ? 'opacity-50 cursor-not-allowed bg-slate-50 text-slate-400 border-slate-200'
+                                : log.r1_sent_at
                                 ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                                 : nextDue === 1
-                                ? 'bg-blue-100 text-blue-900 border-blue-400 font-bold animate-pulse'
-                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                                ? 'bg-blue-100 text-blue-900 border-blue-400 font-bold animate-pulse cursor-pointer'
+                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 cursor-pointer'
                             }`}
-                            title={log.r1_sent_at ? `Sent at ${formatDateTime(log.r1_sent_at)}` : 'Click to preview & send'}
+                            title={
+                              !windowInfo.isOpen
+                                ? '24h Meta window expired — WhatsApp reminders disabled. Use Direct Call.'
+                                : log.r1_sent_at
+                                ? `Sent at ${formatDateTime(log.r1_sent_at)}`
+                                : 'Click to preview & send'
+                            }
                           >
                             <span>1️⃣ Step Follow-Up</span>
                             {log.r1_sent_at ? (
@@ -811,15 +825,23 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
 
                           {/* Stage 2 Pill */}
                           <div
-                            onClick={() => openReminderModal(s, 2)}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border flex items-center space-x-1.5 cursor-pointer transition ${
-                              log.r2_sent_at
+                            onClick={() => windowInfo.isOpen && openReminderModal(s, 2)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border flex items-center space-x-1.5 transition ${
+                              !windowInfo.isOpen
+                                ? 'opacity-50 cursor-not-allowed bg-slate-50 text-slate-400 border-slate-200'
+                                : log.r2_sent_at
                                 ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                                 : nextDue === 2
-                                ? 'bg-amber-100 text-amber-900 border-amber-400 font-bold animate-pulse'
-                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                                ? 'bg-amber-100 text-amber-900 border-amber-400 font-bold animate-pulse cursor-pointer'
+                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 cursor-pointer'
                             }`}
-                            title={log.r2_sent_at ? `Sent at ${formatDateTime(log.r2_sent_at)}` : 'Click to preview & send'}
+                            title={
+                              !windowInfo.isOpen
+                                ? '24h Meta window expired — WhatsApp reminders disabled. Use Direct Call.'
+                                : log.r2_sent_at
+                                ? `Sent at ${formatDateTime(log.r2_sent_at)}`
+                                : 'Click to preview & send'
+                            }
                           >
                             <span>2️⃣ Urgency Alert</span>
                             {log.r2_sent_at ? (
@@ -835,15 +857,23 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
 
                           {/* Stage 3 Pill */}
                           <div
-                            onClick={() => openReminderModal(s, 3)}
-                            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border flex items-center space-x-1.5 cursor-pointer transition ${
-                              log.r3_sent_at
+                            onClick={() => windowInfo.isOpen && openReminderModal(s, 3)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border flex items-center space-x-1.5 transition ${
+                              !windowInfo.isOpen
+                                ? 'opacity-50 cursor-not-allowed bg-slate-50 text-slate-400 border-slate-200'
+                                : log.r3_sent_at
                                 ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                                 : nextDue === 3
-                                ? 'bg-rose-100 text-rose-900 border-rose-400 font-bold animate-pulse'
-                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                                ? 'bg-rose-100 text-rose-900 border-rose-400 font-bold animate-pulse cursor-pointer'
+                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100 cursor-pointer'
                             }`}
-                            title={log.r3_sent_at ? `Sent at ${formatDateTime(log.r3_sent_at)}` : 'Click to preview & send'}
+                            title={
+                              !windowInfo.isOpen
+                                ? '24h Meta window expired — WhatsApp reminders disabled. Use Direct Call.'
+                                : log.r3_sent_at
+                                ? `Sent at ${formatDateTime(log.r3_sent_at)}`
+                                : 'Click to preview & send'
+                            }
                           >
                             <span>3️⃣ Support Call Button</span>
                             {log.r3_sent_at ? (
@@ -862,23 +892,33 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
                         {/* Direct Voice Call */}
                         <a
                           href={`tel:${phone}`}
-                          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs border border-slate-300 transition shadow-xs"
-                          title="Call directly from phone"
+                          className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg font-semibold text-xs transition shadow-xs ${
+                            windowInfo.isOpen
+                              ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+                              : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm'
+                          }`}
+                          title={
+                            windowInfo.isOpen
+                              ? 'Call directly from phone'
+                              : '24h Meta messaging window expired — call customer directly to recover booking'
+                          }
                         >
-                          <PhoneCall className="w-3.5 h-3.5 text-slate-600" />
+                          <PhoneCall className={`w-3.5 h-3.5 ${windowInfo.isOpen ? 'text-slate-600' : 'text-white'}`} />
                           <span>Direct Call</span>
                         </a>
 
-                        {/* Send Stage Reminder Button */}
-                        <button
-                          onClick={() => openReminderModal(s, nextDue || 1)}
-                          className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                          <span>
-                            {nextDue ? `Send Stage ${nextDue} Reminder` : 'Send Reminder...'}
-                          </span>
-                        </button>
+                        {/* Send Stage Reminder Button - ONLY shown when within active 24h Meta window */}
+                        {windowInfo.isOpen && (
+                          <button
+                            onClick={() => openReminderModal(s, nextDue || 1)}
+                            className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>
+                              {nextDue ? `Send Stage ${nextDue} Reminder` : 'Send Reminder...'}
+                            </span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
