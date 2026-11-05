@@ -22,7 +22,7 @@ import {
   RefreshCw,
   Zap,
 } from 'lucide-react';
-import { SessionRecord, SupportTicket, Employee, SessionAssignment, SessionReminderLog } from '../../types';
+import { SessionRecord, SupportTicket, Employee, SessionAssignment, SessionReminderLog, FreightBooking } from '../../types';
 import {
   sendReminderStage,
   formatStateLabel,
@@ -38,6 +38,7 @@ interface InquiriesDeskProps {
   sessions: SessionRecord[];
   supportTickets: SupportTicket[];
   employees?: Employee[];
+  bookings?: FreightBooking[];
   onUpdateSupportStatus: (userId: string, status: SupportTicket['status']) => void;
 }
 
@@ -45,6 +46,7 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
   sessions,
   supportTickets,
   employees = [],
+  bookings = [],
   onUpdateSupportStatus,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'support' | 'sessions'>('sessions');
@@ -55,6 +57,56 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
   const [reminderLogs, setReminderLogs] = useState<Record<string, SessionReminderLog>>({});
   const [isAutoEngineEnabled, setIsAutoEngineEnabled] = useState<boolean>(true);
   const [isAutoProcessing, setIsAutoProcessing] = useState(false);
+
+  // Set of completed user_ids and phones from freight bookings
+  const completedKeys = React.useMemo(() => {
+    const set = new Set<string>();
+    (bookings || []).forEach((b) => {
+      if (b.user_id) set.add(b.user_id);
+      if (b.phone) {
+        set.add(b.phone);
+        const digits = b.phone.replace(/\D/g, '');
+        set.add(digits);
+        if (digits.length === 12 && digits.startsWith('91')) {
+          set.add(digits.slice(2));
+        }
+      }
+    });
+    return set;
+  }, [bookings]);
+
+  // Pure Half-Way Drop-Off Leads only (Exclude completed orders, main menu idle, support)
+  const halfWaySessions = React.useMemo(() => {
+    return sessions.filter((s) => {
+      const st = (s.state || '').toLowerCase();
+      // Exclude terminal / completed / main menu / support states
+      if (
+        st === 'cta_menu' ||
+        st === 'completed' ||
+        st === 'cta_ai' ||
+        st === 'cta_support' ||
+        st === 'main_menu' ||
+        st === 'support' ||
+        st === 'support_flow'
+      ) {
+        return false;
+      }
+
+      // Exclude if already confirmed/completed in bookings
+      if (completedKeys.has(s.user_id) || completedKeys.has(s.phone)) {
+        return false;
+      }
+      const rawPhone = (s.phone || '').replace(/\D/g, '');
+      if (completedKeys.has(rawPhone)) {
+        return false;
+      }
+      if (rawPhone.length === 12 && rawPhone.startsWith('91') && completedKeys.has(rawPhone.slice(2))) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [sessions, completedKeys]);
 
   // Modal State
   const [modalSession, setModalSession] = useState<SessionRecord | null>(null);
@@ -72,12 +124,12 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
     setSessionAssignments(loadedAssignments);
     setReminderLogs(loadedLogs);
 
-    // Auto-assign any sessions that do not have an owner yet
-    if (sessions.length > 0 && employees.length > 0) {
-      const res = dbService.autoAssignSessions(sessions, employees);
+    // Auto-assign any half-way drop-off sessions that do not have an owner yet
+    if (halfWaySessions.length > 0 && employees.length > 0) {
+      const res = dbService.autoAssignSessions(halfWaySessions, employees);
       setSessionAssignments(res.assignments);
     }
-  }, [sessions, employees]);
+  }, [halfWaySessions, employees]);
 
   // Clean phone number helper
   const cleanPhone = (phone?: string) => {
@@ -188,7 +240,7 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
       alert('Please add employees in the Team Management tab first.');
       return;
     }
-    const res = dbService.autoAssignSessions(sessions, employees);
+    const res = dbService.autoAssignSessions(halfWaySessions, employees);
     setSessionAssignments({ ...res.assignments });
     setSuccessToast(`✓ Auto-assigned ${res.newlyAssignedCount} drop-off session(s) across active employees!`);
     setTimeout(() => setSuccessToast(null), 4000);
@@ -270,7 +322,7 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
     setIsAutoProcessing(true);
     let sentCount = 0;
 
-    for (const s of sessions) {
+    for (const s of halfWaySessions) {
       const stage = getNextDueStage(s);
       if (stage) {
         try {
@@ -300,7 +352,7 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
     if (!isAutoEngineEnabled) return;
     const interval = setInterval(() => {
       // Evaluate due reminders
-      sessions.forEach((s) => {
+      halfWaySessions.forEach((s) => {
         const stage = getNextDueStage(s);
         if (stage) {
           sendReminderStage(s.phone, stage, s.state)
@@ -316,17 +368,17 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
     }, 60000); // Check every 60 seconds
 
     return () => clearInterval(interval);
-  }, [isAutoEngineEnabled, sessions, reminderLogs]);
+  }, [isAutoEngineEnabled, halfWaySessions, reminderLogs]);
 
   // Counts for filters
-  const activeWindowCount = sessions.filter((s) => getWindowInfo(s.updated_at).isOpen).length;
-  const expiredWindowCount = sessions.length - activeWindowCount;
-  const stage1DueCount = sessions.filter((s) => getNextDueStage(s) === 1).length;
-  const stage2DueCount = sessions.filter((s) => getNextDueStage(s) === 2).length;
-  const stage3DueCount = sessions.filter((s) => getNextDueStage(s) === 3).length;
+  const activeWindowCount = halfWaySessions.filter((s) => getWindowInfo(s.updated_at).isOpen).length;
+  const expiredWindowCount = halfWaySessions.length - activeWindowCount;
+  const stage1DueCount = halfWaySessions.filter((s) => getNextDueStage(s) === 1).length;
+  const stage2DueCount = halfWaySessions.filter((s) => getNextDueStage(s) === 2).length;
+  const stage3DueCount = halfWaySessions.filter((s) => getNextDueStage(s) === 3).length;
 
   // Filtered session list
-  const filteredSessions = sessions.filter((s) => {
+  const filteredSessions = halfWaySessions.filter((s) => {
     const info = getWindowInfo(s.updated_at);
     const due = getNextDueStage(s);
     if (sessionFilter === 'active_window') return info.isOpen;
@@ -357,7 +409,7 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
                 activeSubTab === 'sessions' ? 'bg-blue-700/60 text-white' : 'bg-slate-200 text-slate-700'
               }`}
             >
-              {sessions.length}
+              {halfWaySessions.length}
             </span>
           </button>
 
@@ -538,7 +590,7 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-xs">
               <span className="text-[11px] font-medium text-slate-500">Total Half-Way Chats</span>
-              <p className="text-xl font-bold text-slate-900 mt-1">{sessions.length}</p>
+              <p className="text-xl font-bold text-slate-900 mt-1">{halfWaySessions.length}</p>
             </div>
             <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 shadow-xs">
               <span className="text-[11px] font-medium text-emerald-800">In 24h Window (Free)</span>
@@ -570,7 +622,7 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                All ({sessions.length})
+                All ({halfWaySessions.length})
               </button>
               <button
                 onClick={() => setSessionFilter('active_window')}

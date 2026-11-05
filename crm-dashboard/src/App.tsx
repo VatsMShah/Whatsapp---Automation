@@ -494,6 +494,7 @@ function AppInner() {
               sessions={sessions}
               supportTickets={supportTickets}
               employees={employees}
+              bookings={bookings}
               onUpdateSupportStatus={handleUpdateSupportStatus}
             />
           )}

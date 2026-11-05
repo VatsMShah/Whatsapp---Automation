@@ -2616,7 +2616,7 @@ serve(async (req: Request) => {
             });
 
             const parsedData = JSON.parse(output.data || "{}");
-            if (output.flowType === "book") {
+            if (output.flowType === "book" || output.state === "cta_menu") {
               const origin = parsedData.loadingYard || parsedData.stuffingAddress || parsedData.loadingPin || "";
               const destination = parsedData.unloadingAddress || parsedData.portCfs || parsedData.unloadingPin || "";
 

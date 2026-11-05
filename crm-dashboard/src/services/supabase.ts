@@ -226,13 +226,79 @@ class SupabaseDataService {
 
       const localMap = this.getLocalStatuses();
 
+      // Track completed user_ids to deduplicate between book_vehicle and users_master
+      const completedUserIds = new Set<string>();
+
       // Only include completed orders in Freight Orders Desk
       // Incomplete/half-chats are tracked in users_master -> Live Bot Sessions
-      const validCompletedOrders = bookingsRes.data.filter((d: any) => {
+      const validCompletedOrders = (bookingsRes.data || []).filter((d: any) => {
         const hasRoute = Boolean(d.origin && d.destination);
-        const isCompleted = d.state === 'cta_menu' || d.state === 'main_menu';
-        return hasRoute && isCompleted;
+        const hasContact = Boolean(d.contact_name || d.company_name);
+        const isCompletedState =
+          d.state === 'cta_menu' ||
+          d.state === 'main_menu' ||
+          d.state === 'completed' ||
+          d.state === 'cta_ai';
+        const isCompleteLead = hasRoute && (isCompletedState || hasContact);
+        if (isCompleteLead && d.user_id) {
+          completedUserIds.add(d.user_id);
+        }
+        return isCompleteLead;
       });
+
+      // Also pull recent completed booking sessions from users_master (state === 'cta_menu' and flow_type === 'book')
+      // This ensures 100% real-time instant synchronization of finished WhatsApp orders into Freight Orders Desk
+      try {
+        const { data: completedSessions } = await this.client
+          .from('users_master')
+          .select('*')
+          .eq('state', 'cta_menu')
+          .eq('flow_type', 'book')
+          .order('updated_at', { ascending: false })
+          .limit(50);
+
+        if (completedSessions && Array.isArray(completedSessions)) {
+          for (const cs of completedSessions) {
+            if (!completedUserIds.has(cs.user_id)) {
+              const flowData = typeof cs.data === 'string' ? JSON.parse(cs.data || '{}') : cs.data || {};
+              const origin = flowData.loadingYard || flowData.stuffingAddress || flowData.loadingLocation || flowData.loadingPin || '';
+              const destination = flowData.unloadingAddress || flowData.portCfs || flowData.unloadingLocation || flowData.unloadingPin || '';
+              if (origin && destination) {
+                validCompletedOrders.push({
+                  user_id: cs.user_id,
+                  phone: cs.phone || flowData.phone || '',
+                  state: 'cta_menu',
+                  cargo_type: flowData.cargoType || 'Domestic',
+                  origin: origin,
+                  destination: destination,
+                  vehicle_or_container: flowData.vehicleSubType || flowData.vehicleType || 'Standard',
+                  material_or_line: flowData.shippingLine || flowData.material || '',
+                  weight: flowData.weight || '',
+                  loading_date: flowData.loadingDate || '',
+                  time_slot: flowData.loadingTime || '',
+                  company_name: flowData.company || '',
+                  contact_name: flowData.contactName || '',
+                  email: flowData.email || '',
+                  remarks: flowData.remarks || '',
+                  is_decision_maker: flowData.isDecisionMaker !== undefined ? flowData.isDecisionMaker : true,
+                  approver_name: flowData.approverName || '',
+                  approver_phone: flowData.approverPhone || '',
+                  approver_role: flowData.approverRole || '',
+                  alternate_phone: flowData.alternatePhone || '',
+                  flow_data: flowData,
+                  updated_at: cs.updated_at,
+                });
+                completedUserIds.add(cs.user_id);
+              }
+            }
+          }
+        }
+      } catch (mergeErr) {
+        console.warn('Could not check users_master for completed bookings:', mergeErr);
+      }
+
+      // Sort by updated_at descending
+      validCompletedOrders.sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
       const processed = validCompletedOrders.map((d: any) => {
         const dbStatus = statusMap.get(d.user_id);
@@ -394,7 +460,7 @@ class SupabaseDataService {
         .from('users_master')
         .select('*')
         .order('updated_at', { ascending: false })
-        .limit(50);
+        .limit(150);
 
       if (error || !data) {
         return [];
