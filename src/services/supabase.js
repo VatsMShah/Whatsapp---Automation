@@ -134,6 +134,7 @@ function mapBookToDB(jsRow) {
     contact_name: jsRow.contactName || '',
     email: jsRow.email || '',
     remarks: remarks,
+    alternate_phone: jsRow.alternatePhone || jsRow.alternate_phone || '',
     flow_data: {
       loading_pin: jsRow.loadingPin || '',
       unloading_pin: jsRow.unloadingPin || '',

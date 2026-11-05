@@ -1441,10 +1441,14 @@ async function processConversation(chat: any, masterRows: any[]) {
       /\b(support|help)\b/i.test(lowerMessage);
 
     if (isBookChoice) {
+      row.user_id = `${phone}_${Date.now()}`;
+      data = {};
       state = "cargo_type";
       flowType = "book";
       response = "📦 Select *Cargo Type*:\n\n_(Reply *Back* to return to Main Menu)_";
     } else if (isProvideChoice) {
+      row.user_id = `${phone}_${Date.now()}`;
+      data = {};
       state = "provider_vehicle_type";
       flowType = "provider";
       response =
@@ -2354,7 +2358,13 @@ async function processConversation(chat: any, masterRows: any[]) {
   // 4. CTA MENU ACTIONS
   // =====================================================================
   else if (state === "cta_menu" || lowerMessage.startsWith("cta_")) {
-    if (message === "cta_new" || lowerMessage === "main menu" || lowerMessage === "post new order") {
+    if (
+      message === "cta_new" ||
+      lowerMessage === "main menu" ||
+      lowerMessage === "post new order" ||
+      lowerMessage === "1" ||
+      lowerMessage.includes("book")
+    ) {
       const newSessionId = `${phone}_${Date.now()}`;
       return {
         user_id: newSessionId,
@@ -2639,7 +2649,7 @@ serve(async (req: Request) => {
                 remarks = remarks ? `Alt Phone: ${parsedData.alternatePhone} | ${remarks}` : `Alt Phone: ${parsedData.alternatePhone}`;
               }
 
-              await supabase.from("book_vehicle").upsert({
+              const { error: bErr } = await supabase.from("book_vehicle").upsert({
                 user_id: output.user_id,
                 phone: parsedData.phone || phone,
                 state: output.state,
@@ -2692,6 +2702,9 @@ serve(async (req: Request) => {
                 },
                 updated_at: output.updated_at,
               });
+              if (bErr) {
+                console.error("Error upserting book_vehicle in Supabase:", bErr);
+              }
             } else if (output.flowType === "provider") {
               await supabase.from("provide_vehicle").upsert({
                 user_id: output.user_id,

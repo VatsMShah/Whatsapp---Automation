@@ -214,6 +214,8 @@ function processConversation(waMessagePayload, masterRows) {
       /\b(support|help)\b/i.test(lowerMessage);
 
     if (isBookChoice) {
+      row.user_id = `${phone}_${Date.now()}`;
+      data = {};
       state = 'cargo_type';
       data.flowType = 'book';
       response =
