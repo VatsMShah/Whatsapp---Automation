@@ -21,6 +21,7 @@ interface HeaderProps {
   employees: Employee[];
   onSwitchToAdmin: () => void;
   onSwitchToEmployee: (emp: Employee) => void;
+  onLogout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -39,6 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   employees,
   onSwitchToAdmin,
   onSwitchToEmployee,
+  onLogout,
 }) => {
   const isAdmin = role === 'admin';
   const [showRoleMenu, setShowRoleMenu] = useState(false);
@@ -188,6 +190,22 @@ export const Header: React.FC<HeaderProps> = ({
               {employees.filter((e) => e.is_active).length === 0 && (
                 <div className="px-4 py-3 text-xs text-slate-400 text-center">
                   No employees added yet
+                </div>
+              )}
+
+              {/* Logout Option */}
+              {onLogout && (
+                <div className="p-1.5 border-t border-slate-100 bg-slate-50/60">
+                  <button
+                    onClick={() => {
+                      setShowRoleMenu(false);
+                      onLogout();
+                    }}
+                    className="w-full flex items-center space-x-2.5 px-3 py-2 text-rose-600 hover:bg-rose-50 rounded-xl transition text-xs font-bold cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Log Out from CRM</span>
+                  </button>
                 </div>
               )}
             </div>

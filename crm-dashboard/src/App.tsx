@@ -8,6 +8,7 @@ import { TeamManager } from './components/team/TeamManager';
 import { ArchiveDesk } from './components/archive/ArchiveDesk';
 import { PriorityDispatchModal } from './components/notifications/PriorityDispatchModal';
 import { NotificationDrawer } from './components/notifications/NotificationDrawer';
+import { LoginPage } from './components/auth/LoginPage';
 import { RoleProvider, useRole } from './context/RoleContext';
 import { dbService, ACTIVE_CLIENT_PROFILE } from './services/supabase';
 import {
@@ -37,7 +38,16 @@ const getRoleKey = (currentRole: string, activeEmployee: Employee | null) => {
 
 // Inner app that has access to RoleContext
 function AppInner() {
-  const { role, currentEmployee, switchToAdmin, switchToEmployee } = useRole();
+  const {
+    isAuthenticated,
+    role,
+    currentEmployee,
+    switchToAdmin,
+    switchToEmployee,
+    loginAsAdmin,
+    loginAsEmployee,
+    logout,
+  } = useRole();
   const isAdmin = role === 'admin';
 
   const [currentTab, setCurrentTab] = useState<DashboardTab>('orders');
@@ -527,6 +537,17 @@ function AppInner() {
 
   const { title, subtitle } = getTabHeader();
 
+  // If not authenticated, render the high-end Traket Logistics Login Portal
+  if (!isAuthenticated) {
+    return (
+      <LoginPage
+        employees={employees}
+        onLoginAdmin={loginAsAdmin}
+        onLoginEmployee={(id, pass) => loginAsEmployee(id, pass, employees)}
+      />
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Sidebar Navigation */}
@@ -538,6 +559,7 @@ function AppInner() {
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
         role={role}
         employeeName={currentEmployee?.name}
+        onLogout={logout}
       />
 
       {/* Main Content Area */}
@@ -559,6 +581,7 @@ function AppInner() {
           employees={employees}
           onSwitchToAdmin={switchToAdmin}
           onSwitchToEmployee={switchToEmployee}
+          onLogout={logout}
         />
 
         {/* Dynamic Views */}

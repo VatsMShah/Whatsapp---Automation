@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   UserCircle,
   Archive,
+  LogOut,
 } from 'lucide-react';
 import { ClientCompanyProfile, DashboardTab } from '../../types';
 import { UserRole } from '../../context/RoleContext';
@@ -21,6 +22,7 @@ interface SidebarProps {
   onToggleCollapse: () => void;
   role: UserRole;
   employeeName?: string;
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -31,6 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
   role,
   employeeName,
+  onLogout,
 }) => {
   const isAdmin = role === 'admin';
 
@@ -184,18 +187,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </div>
 
-      {/* Collapse Button */}
-      <div className={`p-2.5 border-t border-slate-200 flex ${isCollapsed ? 'justify-center' : 'justify-start px-3'}`}>
-        <button
-          onClick={onToggleCollapse}
-          title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-          className="p-2 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition flex items-center space-x-2"
-        >
-          <Menu className="w-4 h-4 text-slate-600" />
-          {!isCollapsed && (
-            <span className="text-xs text-slate-600 font-medium">Collapse</span>
-          )}
-        </button>
+      {/* Bottom Footer: Logout & Collapse */}
+      <div className="p-2.5 border-t border-slate-200 space-y-1">
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            title={isCollapsed ? 'Log Out' : undefined}
+            className={`w-full p-2 rounded-xl text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition flex items-center cursor-pointer ${
+              isCollapsed ? 'justify-center' : 'space-x-2.5 px-3'
+            }`}
+          >
+            <LogOut className="w-4 h-4 text-rose-500 shrink-0" />
+            {!isCollapsed && <span className="text-xs font-bold text-rose-600">Log Out</span>}
+          </button>
+        )}
+
+        <div className={`flex ${isCollapsed ? 'justify-center' : 'justify-start'}`}>
+          <button
+            onClick={onToggleCollapse}
+            title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+            className={`p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition flex items-center cursor-pointer ${
+              isCollapsed ? 'justify-center w-full' : 'space-x-2 px-3 w-full'
+            }`}
+          >
+            <Menu className="w-4 h-4 text-slate-600 shrink-0" />
+            {!isCollapsed && (
+              <span className="text-xs text-slate-600 font-medium">Collapse</span>
+            )}
+          </button>
+        </div>
       </div>
     </aside>
   );
