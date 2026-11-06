@@ -1091,7 +1091,7 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
               }
             }}
           >
-            <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-white text-slate-900 rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden">
               {/* Header */}
               <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <div className="flex items-center space-x-2.5">

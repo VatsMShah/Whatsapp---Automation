@@ -601,7 +601,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                   }
                 }}
                 placeholder={`+ Custom size for ${vehicle.label}...`}
-                className="flex-1 px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
+                className="flex-1 px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 font-medium"
               />
               <button
                 type="button"
@@ -1015,7 +1015,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
               if (e.target === e.currentTarget && !isSaving) setShowForm(false);
             }}
           >
-            <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="bg-white text-slate-900 border border-slate-200 rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 duration-150">
               {/* Modal Header */}
               <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70 shrink-0 space-y-3">
                 <div className="flex items-center justify-between">
@@ -1087,7 +1087,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                     {/* Full Name & Department */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <div>
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block mb-1">
                           Full Name *
                         </label>
                         <div className="relative">
@@ -1097,13 +1097,13 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                             value={form.name}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
                             placeholder="e.g. Ramesh Patel"
-                            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-900 bg-white placeholder:text-slate-400 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block mb-1">
                           Department
                         </label>
                         <div className="relative">
@@ -1111,10 +1111,10 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                           <select
                             value={form.department}
                             onChange={(e) => setForm({ ...form, department: e.target.value })}
-                            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:border-blue-500 bg-white"
+                            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-900 bg-white font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                           >
                             {DEPARTMENTS.map((d) => (
-                              <option key={d} value={d}>{d}</option>
+                              <option key={d} value={d} className="text-slate-900 bg-white">{d}</option>
                             ))}
                           </select>
                         </div>
@@ -1124,7 +1124,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                     {/* System Role & Auto Employee ID */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <div>
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block mb-1">
                           System Role
                         </label>
                         <div className="relative">
@@ -1132,16 +1132,16 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                           <select
                             value={form.role || 'employee'}
                             onChange={(e) => setForm({ ...form, role: e.target.value as 'admin' | 'employee' })}
-                            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:border-blue-500 bg-white"
+                            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-900 bg-white font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                           >
-                            <option value="employee">Employee (Assigned Leads Only)</option>
-                            <option value="admin">Admin (Full Access to All Leads)</option>
+                            <option value="employee" className="text-slate-900 bg-white">Employee (Assigned Leads Only)</option>
+                            <option value="admin" className="text-slate-900 bg-white">Admin (Full Access to All Leads)</option>
                           </select>
                         </div>
                       </div>
 
                       <div>
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block mb-1">
                           Employee ID (Auto-Sequential)
                         </label>
                         <div className="relative">
@@ -1151,7 +1151,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                             value={form.employee_id}
                             readOnly
                             disabled
-                            className="w-full pl-9 pr-3 py-2 border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-700 cursor-not-allowed select-none"
+                            className="w-full pl-9 pr-3 py-2 border border-slate-200 bg-slate-100 rounded-xl text-xs font-mono font-bold text-slate-800 cursor-not-allowed select-none"
                           />
                         </div>
                       </div>
@@ -1160,7 +1160,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                     {/* Email & Phone */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <div>
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block mb-1">
                           Email ID (Username for Login)
                         </label>
                         <div className="relative">
@@ -1170,13 +1170,13 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                             value={form.email}
                             onChange={(e) => setForm({ ...form, email: e.target.value })}
                             placeholder="ramesh@traket.in"
-                            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:border-blue-500"
+                            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-900 bg-white placeholder:text-slate-400 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block mb-1">
                           Phone Number
                         </label>
                         <div className="relative">
@@ -1186,7 +1186,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                             value={form.phone}
                             onChange={(e) => setForm({ ...form, phone: e.target.value })}
                             placeholder="+91 98765 43210"
-                            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs focus:outline-none focus:border-blue-500 font-mono"
+                            className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs text-slate-900 bg-white placeholder:text-slate-400 font-mono font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                           />
                         </div>
                       </div>
@@ -1214,7 +1214,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                           value={form.password || ''}
                           onChange={(e) => setForm({ ...form, password: e.target.value })}
                           placeholder="Enter password or click Auto-Generate"
-                          className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-lg text-xs font-mono bg-white focus:outline-none focus:border-blue-500"
+                          className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-lg text-xs font-mono text-slate-900 bg-white placeholder:text-slate-400 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                         />
                         <button
                           type="button"
