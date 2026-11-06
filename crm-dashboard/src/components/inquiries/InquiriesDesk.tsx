@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   LifeBuoy,
   Phone,
@@ -1079,32 +1080,41 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
       {/* ======================================================== */}
       {/* 5. INTERACTIVE 3-STAGE REMINDER MODAL */}
       {/* ======================================================== */}
-      {modalSession && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden">
-            {/* Header */}
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <div className="flex items-center space-x-2.5">
-                <div className="p-2 rounded-xl bg-blue-600 text-white shadow-sm">
-                  <Sparkles className="w-4 h-4" />
+      {modalSession &&
+        createPortal(
+          <div
+            className="fixed inset-0 bg-slate-950/65 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-in fade-in duration-150"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isSending) {
+                setModalSession(null);
+                setModalError(null);
+              }
+            }}
+          >
+            <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden">
+              {/* Header */}
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center space-x-2.5">
+                  <div className="p-2 rounded-xl bg-blue-600 text-white shadow-sm">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">
+                      Dispatch WhatsApp Reminder
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Customer: <span className="font-mono font-bold text-blue-700">{formatPhoneDisplay(modalSession.phone)}</span> •
+                      Step: <strong className="text-slate-800">{formatStateLabel(modalSession.state)}</strong>
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Dispatch WhatsApp Reminder
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Customer: <span className="font-mono font-bold text-blue-700">{formatPhoneDisplay(modalSession.phone)}</span> •
-                    Step: <strong className="text-slate-800">{formatStateLabel(modalSession.state)}</strong>
-                  </p>
-                </div>
+                <button
+                  onClick={() => setModalSession(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={() => setModalSession(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
             <div className="p-5 space-y-4 text-xs">
               {/* Meta Service Window indicator */}
@@ -1281,7 +1291,8 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Floating Success Toast */}
