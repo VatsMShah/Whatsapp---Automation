@@ -26,8 +26,14 @@ import {
   LeadNotification,
 } from './types';
 
-// Storage key helper for tracking alerted leads
+// Storage key helpers for tracking alerted, dismissed, and viewed leads
 const GET_ALERT_STORAGE_KEY = (roleKey: string) => `traket_seen_alerts_${roleKey}`;
+const GET_DISMISSED_STORAGE_KEY = (roleKey: string) => `traket_dismissed_alerts_${roleKey}`;
+const GET_VIEWED_STORAGE_KEY = (roleKey: string) => `traket_viewed_alerts_${roleKey}`;
+
+const getRoleKey = (currentRole: string, activeEmployee: Employee | null) => {
+  return currentRole === 'employee' && activeEmployee ? activeEmployee.employee_id : 'admin';
+};
 
 // Inner app that has access to RoleContext
 function AppInner() {
@@ -114,10 +120,9 @@ function AppInner() {
   ) => {
     // 1. Identify relevant leads based on active role
     let relevantBookings: FreightBooking[] = [];
-    let roleKey = 'admin';
+    const roleKey = getRoleKey(currentRole, activeEmployee);
 
     if (currentRole === 'employee' && activeEmployee) {
-      roleKey = activeEmployee.employee_id;
       relevantBookings = currentBookings.filter((b) => {
         if (b.status !== 'new') return false;
         const assignment = currentAssignments[b.user_id];
@@ -128,16 +133,28 @@ function AppInner() {
       relevantBookings = currentBookings.filter((b) => b.status === 'new');
     }
 
-    const storageKey = GET_ALERT_STORAGE_KEY(roleKey);
-    let seenIds: string[] = [];
+    // Read persistent dismissed, viewed, and seenModal IDs from localStorage
+    let dismissedIds: string[] = [];
+    let viewedIds: string[] = [];
+    let seenModalIds: string[] = [];
     try {
-      seenIds = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      dismissedIds = JSON.parse(localStorage.getItem(GET_DISMISSED_STORAGE_KEY(roleKey)) || '[]');
+      viewedIds = JSON.parse(localStorage.getItem(GET_VIEWED_STORAGE_KEY(roleKey)) || '[]');
+      seenModalIds = JSON.parse(localStorage.getItem(GET_ALERT_STORAGE_KEY(roleKey)) || '[]');
     } catch (_) {}
 
+    const dismissedSet = new Set(dismissedIds);
+    const viewedSet = new Set(viewedIds);
+
+    // CRITICAL FIX: Filter OUT any leads that employee dismissed so they NEVER reappear on poll!
+    const activeRelevantBookings = relevantBookings.filter((b) => !dismissedSet.has(b.user_id));
+
     // Map to LeadNotification objects
-    const mapped: LeadNotification[] = relevantBookings.map((b) => {
+    const mapped: LeadNotification[] = activeRelevantBookings.map((b) => {
       const assignment = currentAssignments[b.user_id];
       const isOverdue = Date.now() - new Date(b.updated_at).getTime() > 25 * 60 * 1000;
+      const isViewed = viewedSet.has(b.user_id);
+
       return {
         id: `alert_${b.user_id}`,
         bookingId: b.user_id,
@@ -153,7 +170,7 @@ function AppInner() {
         assignedTo: assignment?.assigned_to,
         assignedAt: assignment?.assigned_at,
         createdAt: b.updated_at,
-        status: 'pending',
+        status: isViewed ? 'viewed' : 'pending',
         urgency: isOverdue ? 'urgent' : 'high',
         type: isOverdue ? 'sla_reminder' : 'new_lead',
         isDecisionMaker: b.is_decision_maker,
@@ -169,22 +186,22 @@ function AppInner() {
     if (!hasInitializedAlertsRef.current) {
       hasInitializedAlertsRef.current = true;
       const allCurrentIds = mapped.map((m) => m.bookingId);
-      const combinedSeen = Array.from(new Set([...seenIds, ...allCurrentIds]));
+      const combinedSeen = Array.from(new Set([...seenModalIds, ...allCurrentIds]));
       try {
-        localStorage.setItem(storageKey, JSON.stringify(combinedSeen));
+        localStorage.setItem(GET_ALERT_STORAGE_KEY(roleKey), JSON.stringify(combinedSeen));
       } catch (_) {}
       return;
     }
 
     // For any fresh leads arriving after initial load, pop up the Priority Blur Alert for employees
     if (currentRole === 'employee' && activeEmployee) {
-      const unseen = mapped.find((m) => !seenIds.includes(m.bookingId));
+      const unseen = mapped.find((m) => m.status === 'pending' && !seenModalIds.includes(m.bookingId));
       if (unseen && !activeDispatchAlert) {
         setActiveDispatchAlert(unseen);
 
         // Record as seen in this browser so it doesn't pop up again endlessly
         try {
-          localStorage.setItem(storageKey, JSON.stringify([...seenIds, unseen.bookingId]));
+          localStorage.setItem(GET_ALERT_STORAGE_KEY(roleKey), JSON.stringify([...seenModalIds, unseen.bookingId]));
         } catch (_) {}
 
         // Play audio chime and voice announcement
@@ -229,9 +246,19 @@ function AppInner() {
 
   // Action: Open and jump straight to the lead row from a notification
   const handleOpenLeadFromNotification = (bookingId: string) => {
+    const roleKey = getRoleKey(role, currentEmployee);
     setActiveDispatchAlert(null);
     setCurrentTab('orders');
     setHighlightedBookingId(bookingId);
+
+    // Persist as viewed
+    try {
+      const key = GET_VIEWED_STORAGE_KEY(roleKey);
+      const prev: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!prev.includes(bookingId)) {
+        localStorage.setItem(key, JSON.stringify([...prev, bookingId]));
+      }
+    } catch (_) {}
 
     // Mark as attended in local notification state
     setNotifications((prev) =>
@@ -244,14 +271,79 @@ function AppInner() {
     setActiveDispatchAlert(null);
   }, []);
 
-  // Action: Dismiss a single notification from tray
+  // Action: Dismiss a single notification from tray (cuts it permanently so it never reappears!)
   const handleDismissNotification = (notifId: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== notifId));
+    const roleKey = getRoleKey(role, currentEmployee);
+    const target = notifications.find((n) => n.id === notifId);
+    const bookingId = target ? target.bookingId : notifId.replace(/^alert_/, '');
+
+    try {
+      const key = GET_DISMISSED_STORAGE_KEY(roleKey);
+      const prev: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!prev.includes(bookingId)) {
+        localStorage.setItem(key, JSON.stringify([...prev, bookingId]));
+      }
+    } catch (_) {}
+
+    setNotifications((prev) => prev.filter((n) => n.id !== notifId && n.bookingId !== bookingId));
+    if (activeDispatchAlert?.bookingId === bookingId) {
+      setActiveDispatchAlert(null);
+    }
   };
 
-  // Action: Clear all notifications from tray
+  // Action: Clear all notifications from tray (persists so none reappear on poll!)
   const handleClearAllNotifications = () => {
+    const roleKey = getRoleKey(role, currentEmployee);
+    const bookingIdsToDismiss = notifications.map((n) => n.bookingId);
+
+    try {
+      const key = GET_DISMISSED_STORAGE_KEY(roleKey);
+      const prev: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      const combined = Array.from(new Set([...prev, ...bookingIdsToDismiss]));
+      localStorage.setItem(key, JSON.stringify(combined));
+    } catch (_) {}
+
     setNotifications([]);
+    setActiveDispatchAlert(null);
+  };
+
+  // Action: Mark all notifications as seen / attended
+  const handleMarkAllSeenNotifications = () => {
+    const roleKey = getRoleKey(role, currentEmployee);
+    const allBookingIds = notifications.map((n) => n.bookingId);
+
+    try {
+      const key = GET_VIEWED_STORAGE_KEY(roleKey);
+      const prev: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      const combined = Array.from(new Set([...prev, ...allBookingIds]));
+      localStorage.setItem(key, JSON.stringify(combined));
+    } catch (_) {}
+
+    setNotifications((prev) =>
+      prev.map((n) => ({ ...n, status: 'viewed' as const }))
+    );
+    setActiveDispatchAlert(null);
+  };
+
+  // Action: Mark a single notification as seen / attended
+  const handleMarkSeenNotification = (notifId: string) => {
+    const roleKey = getRoleKey(role, currentEmployee);
+    const target = notifications.find((n) => n.id === notifId);
+    const bookingId = target ? target.bookingId : notifId.replace(/^alert_/, '');
+
+    try {
+      const key = GET_VIEWED_STORAGE_KEY(roleKey);
+      const prev: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!prev.includes(bookingId)) {
+        localStorage.setItem(key, JSON.stringify([...prev, bookingId]));
+      }
+    } catch (_) {}
+
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === notifId || n.bookingId === bookingId ? { ...n, status: 'viewed' as const } : n
+      )
+    );
   };
 
   // Action: Trigger a complete test alert (Modal + Blur + Chime + Voice)
@@ -547,6 +639,8 @@ function AppInner() {
         onOpenLead={handleOpenLeadFromNotification}
         onDismiss={handleDismissNotification}
         onClearAll={handleClearAllNotifications}
+        onMarkAllSeen={handleMarkAllSeenNotifications}
+        onMarkSeen={handleMarkSeenNotification}
         onTriggerTestAlert={handleTriggerTestAlert}
       />
     </div>

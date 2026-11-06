@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Phone,
   MapPin,
@@ -75,13 +76,13 @@ export const PriorityDispatchModal: React.FC<PriorityDispatchModalProps> = ({
     ? `+91 ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}`
     : notification.phone;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-300">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-300">
       {/* Background radial gradient glow for dramatic focus */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-600/20 via-transparent to-transparent pointer-events-none" />
 
       {/* Main Alert Card */}
-      <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border-2 border-blue-500/30 overflow-hidden transform animate-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-xl bg-white text-slate-900 rounded-3xl shadow-2xl border-2 border-blue-500/30 overflow-hidden transform animate-in zoom-in-95 duration-200">
         
         {/* 10-Second Auto-Dock Progress Bar at Top */}
         <div className="w-full bg-slate-100 h-1.5 overflow-hidden">
@@ -269,6 +270,7 @@ export const PriorityDispatchModal: React.FC<PriorityDispatchModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
