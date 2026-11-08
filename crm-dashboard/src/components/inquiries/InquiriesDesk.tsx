@@ -80,26 +80,38 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
 
-  // Set of completed user_ids and phones from freight bookings
-  const completedKeys = useMemo(() => {
+  // Set of completed user_ids from freight bookings
+  const completedUserIds = useMemo(() => {
     const set = new Set<string>();
     (bookings || []).forEach((b) => {
       if (b.user_id) set.add(b.user_id);
-      if (b.phone) {
-        set.add(b.phone);
-        const digits = b.phone.replace(/\D/g, '');
-        set.add(digits);
-        if (digits.length === 12 && digits.startsWith('91')) {
-          set.add(digits.slice(2));
-        }
-      }
     });
     return set;
   }, [bookings]);
 
+  // Track latest completed booking timestamp per phone
+  // (Used to know if an in-progress session happened BEFORE a completed booking, meaning it was already finished)
+  const latestCompletedBookingTimeByPhone = useMemo(() => {
+    const map = new Map<string, number>();
+    (bookings || []).forEach((b) => {
+      if (!b.phone) return;
+      const clean = b.phone.replace(/\D/g, '');
+      const time = new Date(b.updated_at || 0).getTime();
+      if (!map.has(clean) || time > (map.get(clean) || 0)) {
+        map.set(clean, time);
+      }
+      const shortPhone = clean.length === 12 && clean.startsWith('91') ? clean.slice(2) : clean;
+      if (!map.has(shortPhone) || time > (map.get(shortPhone) || 0)) {
+        map.set(shortPhone, time);
+      }
+    });
+    return map;
+  }, [bookings]);
+
   // Pure Half-Way Drop-Off Leads only (Exclude completed orders, main menu idle, support)
   const halfWaySessions = useMemo(() => {
-    return sessions.filter((s) => {
+    // 1. Filter out terminal/completed states and completed bookings
+    const eligible = (sessions || []).filter((s) => {
       const st = (s.state || '').toLowerCase();
       // Exclude terminal / completed / main menu / support states
       if (
@@ -114,21 +126,46 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
         return false;
       }
 
-      // Exclude if already confirmed/completed in bookings
-      if (completedKeys.has(s.user_id) || completedKeys.has(s.phone)) {
+      // Exclude if this exact session user_id was already converted into a completed booking
+      if (s.user_id && completedUserIds.has(s.user_id)) {
         return false;
       }
+
+      // Exclude if the customer completed a booking AFTER this drop-off session (with 60s tolerance)
       const rawPhone = (s.phone || '').replace(/\D/g, '');
-      if (completedKeys.has(rawPhone)) {
-        return false;
-      }
-      if (rawPhone.length === 12 && rawPhone.startsWith('91') && completedKeys.has(rawPhone.slice(2))) {
+      const shortPhone = rawPhone.length === 12 && rawPhone.startsWith('91') ? rawPhone.slice(2) : rawPhone;
+      const sessionTime = new Date(s.updated_at || 0).getTime();
+      const lastBookingTime =
+        latestCompletedBookingTimeByPhone.get(rawPhone) ||
+        latestCompletedBookingTimeByPhone.get(shortPhone) ||
+        0;
+
+      if (lastBookingTime > sessionTime + 60000) {
         return false;
       }
 
       return true;
     });
-  }, [sessions, completedKeys]);
+
+    // 2. Sort newest first so latest drop-offs appear on top
+    const sorted = [...eligible].sort(
+      (a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()
+    );
+
+    // 3. Deduplicate by customer phone (keep each customer's most recent dropped-off session)
+    const latestByPhone = new Map<string, SessionRecord>();
+    for (const s of sorted) {
+      const rawPhone = (s.phone || '').replace(/\D/g, '');
+      const key = rawPhone.length === 12 && rawPhone.startsWith('91') ? rawPhone.slice(2) : rawPhone;
+      if (key && !latestByPhone.has(key)) {
+        latestByPhone.set(key, s);
+      } else if (!key) {
+        latestByPhone.set(s.user_id, s);
+      }
+    }
+
+    return Array.from(latestByPhone.values());
+  }, [sessions, completedUserIds, latestCompletedBookingTimeByPhone]);
 
   // Load assignments & reminder logs on mount
   useEffect(() => {

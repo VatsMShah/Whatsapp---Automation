@@ -2616,7 +2616,34 @@ serve(async (req: Request) => {
             });
 
             const parsedData = JSON.parse(output.data || "{}");
-            if (output.flowType === "book" || output.state === "cta_menu") {
+
+            // Google Sheets background sync for users_master
+            try {
+              const sheetWebhookUrl = Deno.env.get("GOOGLE_SHEET_WEBHOOK_URL") || "https://script.google.com/macros/s/AKfycbzrkVmoYbgLGlV0EiIZIPgjkrw--bpl3ffF4l2rhoay3WSsjF0-fbhxeffKer8BsygA/exec";
+              const sheetId = Deno.env.get("GOOGLE_SHEET_ID") || "1IdG2oaGPdGDzY4H5JwPa0eeHKdXzivMNwkhBslJ5ZUI";
+              fetch(sheetWebhookUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "upsert",
+                  tabTitle: "users_master",
+                  matchColumn: "user_id",
+                  data: {
+                    user_id: output.user_id,
+                    phone: output.phone,
+                    state: output.state,
+                    updated_at: output.updated_at,
+                    flow_type: output.flowType,
+                    data: output.data,
+                  },
+                  sheetId,
+                }),
+              }).catch((e) => console.warn("Background sheet sync failed for users_master:", e));
+            } catch (_) {}
+
+            // Only persist to book_vehicle if order is completed (state === 'cta_menu')
+            // Partial/in-progress chats remain strictly in users_master (Live Drop-Off Recovery)
+            if (output.state === "cta_menu") {
               const origin = parsedData.loadingYard || parsedData.stuffingAddress || parsedData.loadingPin || "";
               const destination = parsedData.unloadingAddress || parsedData.portCfs || parsedData.unloadingPin || "";
 
@@ -2692,6 +2719,40 @@ serve(async (req: Request) => {
                 },
                 updated_at: output.updated_at,
               });
+
+              // Background sync completed booking to Google Sheets book_vehicle tab
+              try {
+                const sheetWebhookUrl = Deno.env.get("GOOGLE_SHEET_WEBHOOK_URL") || "https://script.google.com/macros/s/AKfycbzrkVmoYbgLGlV0EiIZIPgjkrw--bpl3ffF4l2rhoay3WSsjF0-fbhxeffKer8BsygA/exec";
+                const sheetId = Deno.env.get("GOOGLE_SHEET_ID") || "1IdG2oaGPdGDzY4H5JwPa0eeHKdXzivMNwkhBslJ5ZUI";
+                fetch(sheetWebhookUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    action: "upsert",
+                    tabTitle: "book_vehicle",
+                    matchColumn: "user_id",
+                    data: {
+                      user_id: output.user_id,
+                      phone: parsedData.phone || phone,
+                      state: output.state,
+                      cargo_type: parsedData.cargoType || "",
+                      origin: origin,
+                      destination: destination,
+                      vehicle_or_container: vehicleOrContainer,
+                      material_or_line: materialOrLine,
+                      weight: parsedData.weight || "",
+                      loading_date: parsedData.loadingDate || "",
+                      time_slot: parsedData.loadingTime || "",
+                      company_name: parsedData.company || "",
+                      contact_name: parsedData.contactName || "",
+                      email: parsedData.email || "",
+                      remarks: remarks,
+                      updated_at: output.updated_at,
+                    },
+                    sheetId,
+                  }),
+                }).catch((e) => console.warn("Background sheet sync failed for book_vehicle:", e));
+              } catch (_) {}
             } else if (output.flowType === "provider") {
               await supabase.from("provide_vehicle").upsert({
                 user_id: output.user_id,
