@@ -14,7 +14,6 @@ import { dbService, ACTIVE_CLIENT_PROFILE } from './services/supabase';
 import {
   initAudioContext,
   playDispatchChime,
-  speakLeadAnnouncement,
 } from './utils/sound';
 import {
   FreightBooking,
@@ -214,11 +213,10 @@ function AppInner() {
           localStorage.setItem(GET_ALERT_STORAGE_KEY(roleKey), JSON.stringify([...seenModalIds, unseen.bookingId]));
         } catch (_) {}
 
-        // Play audio chime and voice announcement
+        // Play notification chime
         playDispatchChime();
         const originCity = (unseen.origin || 'Source').split(',')[0].trim();
         const destCity = (unseen.destination || 'Destination').split(',')[0].trim();
-        speakLeadAnnouncement(`New lead assigned from ${originCity} to ${destCity}.`);
 
         // Browser Desktop Push Notification (works even if user is on another tab)
         try {
@@ -377,7 +375,6 @@ function AppInner() {
     };
     setActiveDispatchAlert(sampleAlert);
     playDispatchChime();
-    speakLeadAnnouncement('Test lead alert: Mumbai to Ahmedabad container inquiry.');
   };
 
   const handleUpdateBookingStatus = async (

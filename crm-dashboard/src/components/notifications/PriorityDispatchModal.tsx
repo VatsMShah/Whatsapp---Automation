@@ -15,7 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { LeadNotification } from '../../types';
-import { isAudioMuted, setAudioMuted, isVoiceNotificationEnabled, setVoiceEnabled } from '../../utils/sound';
+import { isAudioMuted, setAudioMuted } from '../../utils/sound';
 
 interface PriorityDispatchModalProps {
   notification: LeadNotification | null;
@@ -30,7 +30,6 @@ export const PriorityDispatchModal: React.FC<PriorityDispatchModalProps> = ({
 }) => {
   const [secondsRemaining, setSecondsRemaining] = useState<number>(10);
   const [muted, setMuted] = useState<boolean>(() => isAudioMuted());
-  const [voiceOn, setVoiceOn] = useState<boolean>(() => isVoiceNotificationEnabled());
   const dockRef = React.useRef(onDockToTray);
 
   useEffect(() => {

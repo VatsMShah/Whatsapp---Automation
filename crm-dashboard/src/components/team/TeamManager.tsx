@@ -39,6 +39,9 @@ import {
   AlertCircle,
   HelpCircle,
   Layers,
+  Search,
+  Filter,
+  Clock,
 } from 'lucide-react';
 import { Employee, FreightBooking, LeadAssignment, TRAKET_VEHICLES, TraketVehicleType } from '../../types';
 
@@ -111,6 +114,11 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
   });
   // Vehicles collapsed by default for clean, uncluttered UX
   const [expandedVehicles, setExpandedVehicles] = useState<Record<string, boolean>>({});
+
+  // Quick search and filtering for intuitive team browsing
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedVehicleFilter, setSelectedVehicleFilter] = useState<string>('all');
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>('all');
 
   // Close modals on Escape key
   useEffect(() => {
@@ -312,19 +320,70 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
     }));
   };
 
-  const selectDomestic = () => {
-    const domesticIds = TRAKET_VEHICLES.filter((v) => (v as any).group === 'Domestic').map((v) => v.id);
+  const domesticVehicles = TRAKET_VEHICLES.filter((v) => (v as any).group === 'Domestic');
+  const domesticIds = domesticVehicles.map((v) => v.id);
+  const isDomesticSelected =
+    domesticIds.length > 0 && domesticIds.every((id) => (form.assigned_vehicles || []).includes(id));
+
+  const eximVehicles = TRAKET_VEHICLES.filter((v) => (v as any).group === 'EXIM / FCL');
+  const eximIds = eximVehicles.map((v) => v.id);
+  const isEximSelected =
+    eximIds.length > 0 && eximIds.every((id) => (form.assigned_vehicles || []).includes(id));
+
+  const isAllSelected =
+    TRAKET_VEHICLES.length > 0 && TRAKET_VEHICLES.every((v) => (form.assigned_vehicles || []).includes(v.id));
+
+  const toggleDomestic = () => {
     setForm((prev) => {
       const current = prev.assigned_vehicles || [];
-      return { ...prev, assigned_vehicles: Array.from(new Set([...current, ...domesticIds])) };
+      const alreadySelected = domesticIds.every((id) => current.includes(id));
+      if (alreadySelected) {
+        // Unselect all domestic vehicles and remove their subtypes
+        const domesticSubIds = new Set(
+          domesticVehicles.flatMap((v) => [
+            ...v.subtypes.map((s) => s.id),
+            ...(customSubtypesByVehicle[v.id] || []),
+          ])
+        );
+        return {
+          ...prev,
+          assigned_vehicles: current.filter((id) => !(domesticIds as string[]).includes(id)),
+          assigned_subtypes: (prev.assigned_subtypes || []).filter((s) => !domesticSubIds.has(s)),
+        };
+      } else {
+        // Select all domestic vehicles
+        return {
+          ...prev,
+          assigned_vehicles: Array.from(new Set([...current, ...domesticIds])),
+        };
+      }
     });
   };
 
-  const selectExim = () => {
-    const eximIds = TRAKET_VEHICLES.filter((v) => (v as any).group === 'EXIM / FCL').map((v) => v.id);
+  const toggleExim = () => {
     setForm((prev) => {
       const current = prev.assigned_vehicles || [];
-      return { ...prev, assigned_vehicles: Array.from(new Set([...current, ...eximIds])) };
+      const alreadySelected = eximIds.every((id) => current.includes(id));
+      if (alreadySelected) {
+        // Unselect all EXIM vehicles and remove their subtypes
+        const eximSubIds = new Set(
+          eximVehicles.flatMap((v) => [
+            ...v.subtypes.map((s) => s.id),
+            ...(customSubtypesByVehicle[v.id] || []),
+          ])
+        );
+        return {
+          ...prev,
+          assigned_vehicles: current.filter((id) => !(eximIds as string[]).includes(id)),
+          assigned_subtypes: (prev.assigned_subtypes || []).filter((s) => !eximSubIds.has(s)),
+        };
+      } else {
+        // Select all EXIM vehicles
+        return {
+          ...prev,
+          assigned_vehicles: Array.from(new Set([...current, ...eximIds])),
+        };
+      }
     });
   };
 
@@ -333,6 +392,14 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
       ...prev,
       assigned_vehicles: TRAKET_VEHICLES.map((v) => v.id),
     }));
+  };
+
+  const toggleAllVehicles = () => {
+    if (isAllSelected) {
+      clearVehicles();
+    } else {
+      selectAllVehicles();
+    }
   };
 
   const clearVehicles = () => {
@@ -353,8 +420,28 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
     setShowPassword(true);
   };
 
+  // Capitalize name cleanly for better readability (e.g. "preet" -> "Preet", "RAMU" -> "Ramu")
+  const formatName = (name: string) => {
+    if (!name) return 'Team Member';
+    return name
+      .trim()
+      .split(/\s+/)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  };
+
   const handleCopyCredentials = (emp: Employee) => {
-    const text = `Traket Login Credentials:\nEmployee ID: ${emp.employee_id}\nName: ${emp.name}\nEmail: ${emp.email || 'N/A'}\nPassword: ${emp.password || '(not set)'}`;
+    const text = `Traket Transport CRM Access:
+------------------------------------
+Employee Name : ${formatName(emp.name)}
+Employee ID   : ${emp.employee_id}
+Username/Email: ${emp.email || 'N/A'}
+Phone         : ${emp.phone || 'N/A'}
+Password      : ${emp.password || '(not set)'}
+Department    : ${emp.department || 'Operations'}
+Specializations: ${(emp.assigned_vehicles || []).join(', ') || 'None'}
+------------------------------------
+Portal URL    : ${window.location.origin}`;
     navigator.clipboard.writeText(text);
     setCopiedId(emp.employee_id);
     setTimeout(() => setCopiedId(null), 2500);
@@ -390,6 +477,47 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
 
   // Count unassigned bookings
   const unassignedCount = bookings.filter((b) => !assignments[b.user_id]?.assigned_to).length;
+
+  const employeesWithoutVehicles = activeEmployees.filter(
+    (e) => !e.assigned_vehicles || e.assigned_vehicles.length === 0
+  );
+
+  const filteredEmployees = activeEmployees.filter((emp) => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchName = (emp.name || '').toLowerCase().includes(q);
+      const matchId = (emp.employee_id || '').toLowerCase().includes(q);
+      const matchEmail = (emp.email || '').toLowerCase().includes(q);
+      const matchPhone = (emp.phone || '').includes(q);
+      const matchDept = (emp.department || '').toLowerCase().includes(q);
+      const matchVeh = (emp.assigned_vehicles || []).some((v) => v.toLowerCase().includes(q));
+      if (!matchName && !matchId && !matchEmail && !matchPhone && !matchDept && !matchVeh) {
+        return false;
+      }
+    }
+
+    if (selectedVehicleFilter !== 'all') {
+      if (selectedVehicleFilter === 'unassigned') {
+        if ((emp.assigned_vehicles || []).length > 0) return false;
+      } else if (selectedVehicleFilter === 'domestic') {
+        const domesticIds = ['Tempo', 'Truck', 'Container (Domestic)', 'Trailer / ODC'];
+        const hasDomestic = (emp.assigned_vehicles || []).some((v) => domesticIds.includes(v));
+        if (!hasDomestic) return false;
+      } else if (selectedVehicleFilter === 'exim') {
+        const eximIds = ['FCL 20', 'FCL 40'];
+        const hasExim = (emp.assigned_vehicles || []).some((v) => eximIds.includes(v));
+        if (!hasExim) return false;
+      } else {
+        if (!(emp.assigned_vehicles || []).includes(selectedVehicleFilter)) return false;
+      }
+    }
+
+    if (selectedDeptFilter !== 'all') {
+      if (emp.department !== selectedDeptFilter) return false;
+    }
+
+    return true;
+  });
 
   // Count specialists per vehicle
   const getSpecialistCount = (vehicleId: string) => {
@@ -622,83 +750,88 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
     <div className="space-y-6">
       {/* Header Row */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-extrabold text-slate-900 flex items-center space-x-2">
-            <Users className="w-5 h-5 text-blue-600" />
-            <span>Team & Vehicle Management</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Admin control for vehicle assignment, auto-routing leads, and employee permissions
-          </p>
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Team & Vehicle Management</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Assign vehicle specializations, manage credentials, and control automatic WhatsApp lead routing
+            </p>
+          </div>
         </div>
         <button
+          type="button"
           onClick={openAddForm}
-          className="flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-sm transition self-start sm:self-auto cursor-pointer"
+          className="flex items-center justify-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition self-start sm:self-auto cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>Add Employee</span>
+          <span>Add Team Member</span>
         </button>
       </div>
 
-      {/* Top Banner: Vehicle-Based Auto Lead Assignment Control Center */}
-      <div className="p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 rounded-2xl text-white shadow-md border border-slate-800 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="space-y-1 max-w-xl">
-            <div className="flex items-center space-x-2">
-              <span className="px-2 py-0.5 rounded-md bg-blue-500/30 text-blue-200 text-[10px] font-bold tracking-wider uppercase border border-blue-400/30 flex items-center space-x-1">
-                <Truck className="w-3 h-3 text-blue-300" />
-                <span>Vehicle Lead Routing Engine</span>
+      {/* Vehicle-Based Auto Lead Assignment Control Center */}
+      <div className="p-5 bg-white rounded-2xl shadow-xs border border-slate-200/90 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-slate-100">
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="flex items-center space-x-2.5 flex-wrap gap-y-1">
+              <span className="px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-bold uppercase tracking-wider border border-blue-200 flex items-center space-x-1.5">
+                <Truck className="w-3.5 h-3.5 text-blue-600" />
+                <span>Lead Routing Engine</span>
               </span>
               <span
-                className={`text-[11px] font-semibold flex items-center space-x-1.5 px-2 py-0.5 rounded-full ${
+                className={`text-xs font-bold flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full ${
                   isAutoAssignEnabled
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border border-amber-200'
                 }`}
               >
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    isAutoAssignEnabled ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'
+                    isAutoAssignEnabled ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'
                   }`}
                 />
-                <span>{isAutoAssignEnabled ? 'AUTO-LEAD: ACTIVE (Vehicle-Based)' : 'AUTO-LEAD: PAUSED (Manual Mode)'}</span>
+                <span>{isAutoAssignEnabled ? 'Auto-Dispatch: ACTIVE' : 'Auto-Dispatch: PAUSED (Manual Mode)'}</span>
               </span>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              When <strong>Active</strong>, new leads for <strong>Truck</strong>, <strong>Tempo</strong>, <strong>Container</strong>, or <strong>Trailer</strong> are automatically assigned to the designated vehicle specialist. You can pause anytime to assign leads manually.
+            <p className="text-xs text-slate-600 leading-relaxed">
+              When <strong>Active</strong>, incoming WhatsApp leads for <strong>Truck</strong>, <strong>Tempo</strong>, <strong>Container</strong>, <strong>Trailer</strong> & <strong>FCL</strong> are instantly routed to specialists handling those vehicles.
             </p>
           </div>
 
-          {/* Controls: Pause / Resume Toggle & Run Auto Assign */}
-          <div className="flex items-center flex-wrap gap-2.5">
-            {/* Pause / Convert to Manual Toggle */}
+          {/* Action Buttons */}
+          <div className="flex items-center flex-wrap gap-2.5 shrink-0">
+            {/* Pause / Resume Toggle */}
             <button
+              type="button"
               onClick={() => onToggleAutoAssign && onToggleAutoAssign(!isAutoAssignEnabled)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 border shadow-sm cursor-pointer ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 border shadow-2xs cursor-pointer ${
                 isAutoAssignEnabled
-                  ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border-amber-500/40'
-                  : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
+                  ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
               }`}
             >
               {isAutoAssignEnabled ? (
                 <>
-                  <PauseCircle className="w-4 h-4 text-amber-300" />
-                  <span>Pause Auto-Lead (Manual Mode)</span>
+                  <PauseCircle className="w-4 h-4 text-amber-600" />
+                  <span>Pause Auto-Routing</span>
                 </>
               ) : (
                 <>
-                  <PlayCircle className="w-4 h-4 text-emerald-300" />
-                  <span>Resume Auto-Lead</span>
+                  <PlayCircle className="w-4 h-4 text-white" />
+                  <span>Resume Auto-Routing</span>
                 </>
               )}
             </button>
 
             {/* Run Auto Assign Button */}
             <button
+              type="button"
               onClick={handleTriggerAuto}
               disabled={isTriggeringAuto || unassignedCount === 0}
-              className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs flex items-center space-x-1.5 transition shadow-sm cursor-pointer"
-              title="Automatically assign all currently unassigned freight leads based on vehicle matching"
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs flex items-center space-x-1.5 transition shadow-xs cursor-pointer"
+              title="Automatically match and assign pending freight leads"
             >
               <Zap className="w-3.5 h-3.5 text-amber-300" />
               <span>{isTriggeringAuto ? 'Assigning...' : `Auto-Assign Pending (${unassignedCount})`}</span>
@@ -706,275 +839,482 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
           </div>
         </div>
 
-        {/* Vehicle Specialists Breakdown Row */}
-        <div className="pt-2 border-t border-white/10 space-y-2">
-          <div className="flex items-center justify-between text-[11px] text-slate-300 font-semibold">
-            <span>Specialists by Vehicle Category</span>
-            <span className="text-[10px] text-slate-400">Strict Auto-Routing: Specialists only receive assigned vehicle leads</span>
+        {/* Vehicle Specialists Breakdown Row (Clickable Filter Chips!) */}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 font-medium">
+            <span className="font-bold text-slate-700">Specialist Coverage by Vehicle Category:</span>
+            <span className="text-[11px] text-slate-400">Click any card to filter team members</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
             {TRAKET_VEHICLES.map((v) => {
               const count = getSpecialistCount(v.id);
+              const isFiltered = selectedVehicleFilter === v.id;
+              const shortLabel = v.id === 'Container (Domestic)' ? 'Container' : v.label;
+
               return (
-                <div
+                <button
                   key={v.id}
-                  className="p-2 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between"
+                  type="button"
+                  onClick={() => setSelectedVehicleFilter(isFiltered ? 'all' : v.id)}
+                  className={`p-2.5 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                    isFiltered
+                      ? 'border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500/20'
+                      : 'border-slate-200 bg-slate-50/70 hover:bg-slate-100/80 hover:border-slate-300'
+                  }`}
                 >
                   <div className="flex items-center space-x-2 min-w-0">
-                    <span className="text-base shrink-0">{v.icon}</span>
-                    <div className="min-w-0">
-                      <span className="font-bold text-white text-xs block truncate">{v.label}</span>
-                      <span className="text-[10px] text-slate-400 block truncate">{(v as any).group || 'Fleet'}</span>
+                    <span className="text-xl shrink-0 leading-none">{v.icon}</span>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-slate-900 text-xs block truncate" title={v.label}>
+                        {shortLabel}
+                      </span>
+                      <span className="text-[10px] text-slate-500 block truncate">
+                        {(v as any).group || 'Fleet'}
+                      </span>
                     </div>
                   </div>
-                  <span
-                    className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full shrink-0 ml-1 ${
-                      count > 0 ? 'bg-blue-500/30 text-blue-200' : 'bg-rose-500/20 text-rose-300'
-                    }`}
-                  >
-                    {count} Active
-                  </span>
-                </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                        count > 0
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {count > 0 ? `✓ ${count} Active` : '0 Active'}
+                    </span>
+                    {isFiltered && (
+                      <span className="text-[9px] font-bold text-blue-600 bg-blue-100 px-1 rounded">Filtered</span>
+                    )}
+                  </div>
+                </button>
               );
             })}
           </div>
         </div>
       </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Team Members', value: employees.length, color: 'blue' },
-          { label: 'Active Specialists', value: activeEmployees.length, color: 'emerald' },
-          { label: 'Total Assigned Leads', value: Object.keys(assignments).length, color: 'violet' },
-          { label: 'Pending Unassigned Leads', value: unassignedCount, color: unassignedCount > 0 ? 'amber' : 'slate' },
-        ].map((stat) => (
-          <div
-            key={stat.label}
-            className={`p-4 rounded-xl border bg-${stat.color}-50/60 border-${stat.color}-200`}
-          >
-            <div className={`text-2xl font-extrabold text-${stat.color}-700`}>{stat.value}</div>
-            <div className={`text-xs font-semibold text-${stat.color}-600 mt-0.5`}>{stat.label}</div>
+      {/* KPI Stats Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="p-4 rounded-2xl border border-slate-200/90 bg-white shadow-2xs hover:shadow-xs transition">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-600">Total Team</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Users className="w-4 h-4" />
+            </div>
           </div>
-        ))}
+          <div className="text-2xl font-extrabold text-slate-900 mt-2">{employees.length}</div>
+          <div className="text-xs text-slate-500 mt-0.5 flex items-center space-x-1">
+            <span>{activeEmployees.length} Active</span>
+            <span>•</span>
+            <span>{inactiveEmployees.length} Inactive</span>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl border border-slate-200/90 bg-white shadow-2xs hover:shadow-xs transition">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-600">Active Specialists</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <UserCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-extrabold text-emerald-600 mt-2">{activeEmployees.length}</div>
+          <div className="text-xs text-slate-500 mt-0.5">Ready for auto-routing</div>
+        </div>
+
+        <div className="p-4 rounded-2xl border border-slate-200/90 bg-white shadow-2xs hover:shadow-xs transition">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-600">Assigned Leads</span>
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl font-extrabold text-indigo-600 mt-2">{Object.keys(assignments).length}</div>
+          <div className="text-xs text-slate-500 mt-0.5">Handled across fleet</div>
+        </div>
+
+        <div className="p-4 rounded-2xl border border-slate-200/90 bg-white shadow-2xs hover:shadow-xs transition">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-600">Pending Leads</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div className={`text-2xl font-extrabold mt-2 ${unassignedCount > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
+            {unassignedCount}
+          </div>
+          <div className="text-xs text-slate-500 mt-0.5">
+            {unassignedCount > 0 ? 'Awaiting assignment' : 'All leads assigned'}
+          </div>
+        </div>
       </div>
 
-      {/* Active Employees Grid */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            Active Team Members ({activeEmployees.length})
+      {/* Active Team Members Section */}
+      <div className="space-y-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center space-x-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">
+              Active Team Members ({filteredEmployees.length})
+            </h3>
+            {filteredEmployees.length !== activeEmployees.length && (
+              <span className="text-[11px] text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                Filtered from {activeEmployees.length}
+              </span>
+            )}
           </div>
-          <span className="text-[11px] font-medium text-slate-400">
-            Next Available ID: <span className="font-mono font-bold text-blue-600">{nextSequentialId}</span>
+          <span className="text-xs font-medium text-slate-500">
+            Next Employee ID:{' '}
+            <span className="font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+              {nextSequentialId}
+            </span>
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {activeEmployees.map((emp) => {
-            const totalLeads = leadsPerEmployee(emp.employee_id);
-            const activeLeads = activeLeadsPerEmployee(emp.employee_id);
-            const isCopied = copiedId === emp.employee_id;
-            const isPassRevealed = !!revealedPasswords[emp.employee_id];
-            const vehicles = emp.assigned_vehicles || [];
-
-            return (
-              <div
-                key={emp.employee_id}
-                className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow space-y-3 flex flex-col justify-between"
+        {/* Filter & Search Bar */}
+        <div className="p-3 bg-white rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+          {/* Search Box */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search member by name, ID, phone, email, vehicle..."
+              className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
               >
-                <div>
-                  {/* Card Header */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-extrabold text-sm shadow-sm shrink-0">
-                        {emp.name
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')
-                          .toUpperCase()
-                          .slice(0, 2)}
-                      </div>
-                      <div>
-                        <div className="font-bold text-slate-900 text-sm">{emp.name}</div>
-                        <div className="flex items-center space-x-2 mt-0.5">
-                          <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded">
-                            {emp.employee_id}
-                          </span>
-                          <span
-                            className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded-full ${
-                              emp.role === 'admin'
-                                ? 'bg-purple-100 text-purple-700'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {emp.role || 'employee'}
-                          </span>
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Quick Filter Pills */}
+          <div className="flex items-center flex-wrap gap-1.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setSelectedVehicleFilter('all')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer border ${
+                selectedVehicleFilter === 'all'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+              }`}
+            >
+              All Fleet ({activeEmployees.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedVehicleFilter(selectedVehicleFilter === 'domestic' ? 'all' : 'domestic')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer border ${
+                selectedVehicleFilter === 'domestic'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+              }`}
+            >
+              Domestic Fleet
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedVehicleFilter(selectedVehicleFilter === 'exim' ? 'all' : 'exim')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer border ${
+                selectedVehicleFilter === 'exim'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                  : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-200'
+              }`}
+            >
+              EXIM / FCL
+            </button>
+            {employeesWithoutVehicles.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedVehicleFilter(selectedVehicleFilter === 'unassigned' ? 'all' : 'unassigned')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition cursor-pointer border ${
+                  selectedVehicleFilter === 'unassigned'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                    : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border-amber-200'
+                }`}
+              >
+                No Vehicles ({employeesWithoutVehicles.length})
+              </button>
+            )}
+            {(selectedVehicleFilter !== 'all' || searchQuery) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedVehicleFilter('all');
+                  setSearchQuery('');
+                }}
+                className="text-xs text-rose-600 hover:text-rose-700 font-bold px-2 py-1 cursor-pointer"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Member Cards Grid */}
+        {filteredEmployees.length === 0 ? (
+          <div className="p-10 bg-white rounded-2xl border border-slate-200 text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+              <Search className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-slate-900">No team members found</h4>
+              <p className="text-xs text-slate-500 mt-1">
+                No specialists matched your current search query or fleet filter.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setSelectedVehicleFilter('all');
+              }}
+              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+            >
+              Clear All Filters
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filteredEmployees.map((emp) => {
+              const totalLeads = leadsPerEmployee(emp.employee_id);
+              const activeLeads = activeLeadsPerEmployee(emp.employee_id);
+              const isCopied = copiedId === emp.employee_id;
+              const isPassRevealed = !!revealedPasswords[emp.employee_id];
+              const vehicles = emp.assigned_vehicles || [];
+              const formattedName = formatName(emp.name);
+
+              return (
+                <div
+                  key={emp.employee_id}
+                  className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-2xs hover:shadow-md transition-all space-y-3 flex flex-col justify-between"
+                >
+                  <div>
+                    {/* Card Header */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-extrabold text-sm shadow-xs shrink-0">
+                          {emp.name
+                            .split(' ')
+                            .map((n) => n[0])
+                            .join('')
+                            .toUpperCase()
+                            .slice(0, 2)}
+                        </div>
+                        <div>
+                          <div className="font-extrabold text-slate-900 text-sm tracking-tight">{formattedName}</div>
+                          <div className="flex items-center space-x-2 mt-1">
+                            <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                              {emp.employee_id}
+                            </span>
+                            <span
+                              className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                emp.role === 'admin'
+                                  ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
+                              }`}
+                            >
+                              {emp.role === 'admin' ? 'Admin' : 'Specialist'}
+                            </span>
+                          </div>
                         </div>
                       </div>
+
+                      <div className="flex items-center space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => openEditForm(emp)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                          title="Edit profile & vehicle routing"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeactivate(emp.employee_id)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                          title="Deactivate specialist"
+                        >
+                          <UserX className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center space-x-1">
-                      <button
-                        onClick={() => openEditForm(emp)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
-                        title="Edit employee"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => setConfirmDeactivate(emp.employee_id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
-                        title="Deactivate employee"
-                      >
-                        <UserX className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Contact Info */}
-                  <div className="space-y-1 text-xs text-slate-600 pt-2 border-t border-slate-100 mt-2">
-                    {emp.email && (
+                    {/* Contact Info */}
+                    <div className="space-y-1.5 text-xs text-slate-600 pt-3 border-t border-slate-100 mt-3">
                       <div className="flex items-center space-x-2 truncate">
-                        <Mail className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span className="truncate">{emp.email}</span>
+                        <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{emp.email || <span className="italic text-slate-400">No email set</span>}</span>
                       </div>
-                    )}
-                    {emp.phone && (
                       <div className="flex items-center space-x-2">
-                        <Phone className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span className="font-mono">{emp.phone}</span>
+                        <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="font-mono">{emp.phone || <span className="italic text-slate-400">No phone set</span>}</span>
                       </div>
-                    )}
-                    <div className="flex items-center space-x-2">
-                      <Briefcase className="w-3 h-3 text-slate-400 shrink-0" />
-                      <span>{emp.department || 'Operations'}</span>
+                      <div className="flex items-center space-x-2">
+                        <Briefcase className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="font-medium text-slate-700">{emp.department || 'Operations'}</span>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Assigned Vehicles & Specializations */}
-                  <div className="mt-3 pt-2.5 border-t border-slate-100 space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-bold text-slate-700 flex items-center space-x-1">
-                        <Truck className="w-3 h-3 text-blue-600" />
-                        <span>Specializations ({vehicles.length}):</span>
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        {vehicles.length === 0 ? 'No vehicles' : 'Strict Match'}
-                      </span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {vehicles.length > 0 ? (
-                        vehicles.map((v) => {
-                          const info = TRAKET_VEHICLES.find((tv) => tv.id === v);
-                          const vSubtypeIds = info?.subtypes.map((s) => s.id) || [];
-                          const customSubs = customSubtypesByVehicle[v] || [];
-                          const allSubIds = [...vSubtypeIds, ...customSubs];
-                          const selectedSubs = (emp.assigned_subtypes || []).filter((s) =>
-                            allSubIds.includes(s) || (vehicles.length === 1 && !TRAKET_VEHICLES.flatMap((x) => x.subtypes.map((y) => y.id)).includes(s))
-                          );
+                    {/* Assigned Vehicles & Specializations */}
+                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-700 flex items-center space-x-1.5">
+                          <Truck className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Routing Specializations ({vehicles.length})</span>
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-medium">
+                          {vehicles.length === 0 ? 'No vehicles' : 'Strict Auto-Match'}
+                        </span>
+                      </div>
 
-                          return (
-                            <div key={v} className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                              <div className="flex items-center justify-between font-bold text-slate-800">
-                                <span className="flex items-center space-x-1.5 text-[11px]">
-                                  <span>{info?.icon || '🚛'}</span>
-                                  <span>{v}</span>
-                                </span>
-                                {selectedSubs.length === 0 ? (
-                                  <span className="text-[9px] font-semibold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.2 rounded">
-                                    All Sizes
+                      <div className="space-y-1.5">
+                        {vehicles.length > 0 ? (
+                          vehicles.map((v) => {
+                            const info = TRAKET_VEHICLES.find((tv) => tv.id === v);
+                            const vSubtypeIds = info?.subtypes.map((s) => s.id) || [];
+                            const customSubs = customSubtypesByVehicle[v] || [];
+                            const allSubIds = [...vSubtypeIds, ...customSubs];
+                            const selectedSubs = (emp.assigned_subtypes || []).filter((s) =>
+                              allSubIds.includes(s) || (vehicles.length === 1 && !TRAKET_VEHICLES.flatMap((x) => x.subtypes.map((y) => y.id)).includes(s))
+                            );
+
+                            return (
+                              <div key={v} className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                                <div className="flex items-center justify-between font-bold text-slate-800">
+                                  <span className="flex items-center space-x-1.5 text-xs">
+                                    <span>{info?.icon || '🚛'}</span>
+                                    <span>{v}</span>
                                   </span>
-                                ) : (
-                                  <span className="text-[9px] font-bold text-blue-700 bg-blue-100/70 px-1.5 py-0.2 rounded">
-                                    {selectedSubs.length} Selected
-                                  </span>
+                                  {selectedSubs.length === 0 ? (
+                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                                      All Capacities
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md">
+                                      {selectedSubs.length} Selected
+                                    </span>
+                                  )}
+                                </div>
+                                {selectedSubs.length > 0 && (
+                                  <div className="mt-1.5 flex flex-wrap gap-1">
+                                    {selectedSubs.map((sub) => (
+                                      <span
+                                        key={sub}
+                                        className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono text-slate-700 font-medium"
+                                      >
+                                        {sub}
+                                      </span>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
-                              {selectedSubs.length > 0 && (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {selectedSubs.map((sub) => (
-                                    <span
-                                      key={sub}
-                                      className="px-1.5 py-0.2 rounded bg-white border border-slate-200 text-[9px] font-mono text-slate-700 font-medium"
-                                    >
-                                      {sub}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px]">
-                          ⚠️ No vehicles assigned. Member will not receive auto-leads.
-                        </div>
-                      )}
+                            );
+                          })
+                        ) : (
+                          <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
+                            <span className="flex items-center space-x-1.5">
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>No vehicles assigned</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingEmployee(emp);
+                                setForm({
+                                  employee_id: emp.employee_id,
+                                  name: emp.name,
+                                  email: emp.email || '',
+                                  phone: emp.phone || '',
+                                  department: emp.department || 'Sales',
+                                  role: emp.role || 'employee',
+                                  password: emp.password || '',
+                                  is_active: emp.is_active ?? true,
+                                  assigned_vehicles: emp.assigned_vehicles || [],
+                                  assigned_subtypes: emp.assigned_subtypes || [],
+                                });
+                                setActiveModalTab('vehicles');
+                                setShowForm(true);
+                              }}
+                              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                            >
+                              Configure
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Password & Credentials Box */}
+                    <div className="mt-3 p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                      <div className="flex items-center space-x-1.5 text-slate-600 font-mono">
+                        <Key className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-slate-500 font-sans text-[11px]">Pass:</span>
+                        <span className="font-bold text-slate-800">
+                          {emp.password
+                            ? isPassRevealed
+                              ? emp.password
+                              : '••••••••'
+                            : '(not set)'}
+                        </span>
+                        {emp.password && (
+                          <button
+                            type="button"
+                            onClick={() => togglePasswordReveal(emp.employee_id)}
+                            className="text-slate-400 hover:text-slate-600 ml-1 p-0.5 cursor-pointer"
+                            title={isPassRevealed ? 'Hide password' : 'Show password'}
+                          >
+                            {isPassRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCredentials(emp)}
+                        className={`text-xs font-bold px-2.5 py-1 rounded-lg transition flex items-center space-x-1 cursor-pointer border ${
+                          isCopied
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                            : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+                        }`}
+                        title="Copy login details to send to specialist"
+                      >
+                        {isCopied ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Share Login</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
 
-                  {/* Password & Credential Box */}
-                  <div className="mt-3 p-2 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
-                    <div className="flex items-center space-x-1.5 text-slate-600 font-mono">
-                      <Key className="w-3 h-3 text-slate-400" />
-                      <span>Password:</span>
-                      <span className="font-bold text-slate-800">
-                        {emp.password
-                          ? isPassRevealed
-                            ? emp.password
-                            : '••••••••'
-                          : '(not set)'}
-                      </span>
-                      {emp.password && (
-                        <button
-                          onClick={() => togglePasswordReveal(emp.employee_id)}
-                          className="text-slate-400 hover:text-slate-600 ml-1 p-0.5"
-                          title={isPassRevealed ? 'Hide' : 'Reveal'}
-                        >
-                          {isPassRevealed ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                        </button>
-                      )}
+                  {/* Lead Metrics Footer */}
+                  <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                    <div className="flex items-center space-x-1">
+                      <span>Active Leads:</span>
+                      <span className="font-bold text-slate-900 bg-slate-100 px-1.5 py-0.2 rounded font-mono">{activeLeads}</span>
                     </div>
-                    <button
-                      onClick={() => handleCopyCredentials(emp)}
-                      className={`text-[10px] font-bold px-2 py-1 rounded transition flex items-center space-x-1 ${
-                        isCopied
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
-                      }`}
-                      title="Copy credentials to send to employee"
-                    >
-                      {isCopied ? (
-                        <>
-                          <Check className="w-3 h-3 text-emerald-600" />
-                          <span>Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3 h-3" />
-                          <span>Share</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center space-x-1">
+                      <span>Lifetime Leads:</span>
+                      <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-mono">{totalLeads}</span>
+                    </div>
                   </div>
                 </div>
-
-                {/* Lead Metrics Footer */}
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                  <div>
-                    Active Leads:{' '}
-                    <span className="font-bold text-slate-900">{activeLeads}</span>
-                  </div>
-                  <div>
-                    Lifetime Leads:{' '}
-                    <span className="font-bold text-blue-600">{totalLeads}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Inactive Employees Section */}
@@ -1260,24 +1600,39 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                       <div className="flex flex-wrap items-center gap-1.5 text-xs">
                         <button
                           type="button"
-                          onClick={selectDomestic}
-                          className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold border border-blue-200 transition cursor-pointer"
+                          onClick={toggleDomestic}
+                          className={`px-2.5 py-1 rounded-lg font-bold border transition cursor-pointer flex items-center space-x-1 ${
+                            isDomesticSelected
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs hover:bg-blue-700'
+                              : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-300'
+                          }`}
                         >
-                          Domestic Fleet (4)
+                          {isDomesticSelected && <Check className="w-3 h-3" />}
+                          <span>Domestic Fleet (4)</span>
                         </button>
                         <button
                           type="button"
-                          onClick={selectExim}
-                          className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold border border-indigo-200 transition cursor-pointer"
+                          onClick={toggleExim}
+                          className={`px-2.5 py-1 rounded-lg font-bold border transition cursor-pointer flex items-center space-x-1 ${
+                            isEximSelected
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs hover:bg-indigo-700'
+                              : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-300'
+                          }`}
                         >
-                          EXIM / FCL (2)
+                          {isEximSelected && <Check className="w-3 h-3" />}
+                          <span>EXIM / FCL (2)</span>
                         </button>
                         <button
                           type="button"
-                          onClick={selectAllVehicles}
-                          className="px-2.5 py-1 rounded-lg bg-white text-slate-800 hover:bg-slate-100 font-bold border border-slate-200 shadow-2xs transition cursor-pointer"
+                          onClick={toggleAllVehicles}
+                          className={`px-2.5 py-1 rounded-lg font-bold border transition cursor-pointer flex items-center space-x-1 ${
+                            isAllSelected
+                              ? 'bg-slate-800 text-white border-slate-800 shadow-xs hover:bg-slate-900'
+                              : 'bg-white text-slate-800 hover:bg-slate-100 border-slate-300 shadow-2xs'
+                          }`}
                         >
-                          All Fleet (6)
+                          {isAllSelected && <Check className="w-3 h-3" />}
+                          <span>All Fleet (6)</span>
                         </button>
                         <button
                           type="button"
@@ -1339,16 +1694,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
                     Cancel
                   </button>
 
-                  {activeModalTab === 'profile' ? (
-                    <button
-                      type="button"
-                      onClick={() => setActiveModalTab('vehicles')}
-                      className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer"
-                    >
-                      <span>Assign Vehicles</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  ) : (
+                  {activeModalTab === 'vehicles' && (
                     <button
                       type="button"
                       onClick={() => setActiveModalTab('profile')}

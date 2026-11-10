@@ -458,6 +458,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                 <th className="py-3 px-3.5 whitespace-nowrap">User ID</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">Commercial Approver (Decision-Maker)</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">Lead Submitter (Operations)</th>
+                <th className="py-3 px-3.5 whitespace-nowrap">Phone & Alternate Phone</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">Route (Locations)</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">PIN to PIN</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">Cargo & Vehicle Specs</th>
@@ -472,7 +473,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {sortedBookings.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-12 text-center text-slate-500">
+                  <td colSpan={14} className="py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center space-y-2">
                       <Package className="w-8 h-8 text-slate-400" />
                       <p className="font-semibold text-slate-700">No freight orders found</p>
@@ -602,6 +603,63 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                             Same as Approver
                           </div>
                         )}
+                      </td>
+
+                      {/* 4. Phone Number & Alternate Phone Number */}
+                      <td className="py-3.5 px-3.5 whitespace-nowrap">
+                        <div className="space-y-1.5">
+                          {/* Primary Phone */}
+                          <div className="flex items-center space-x-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" title="Primary WhatsApp Contact" />
+                            <Phone className="w-3 h-3 text-blue-600 shrink-0" />
+                            <a
+                              href={`tel:${(b.phone || '').replace(/\D/g, '')}`}
+                              className="font-mono text-xs font-bold text-slate-900 hover:text-blue-600 hover:underline"
+                              title="Call Primary Phone"
+                            >
+                              {formatPhone(b.phone)}
+                            </a>
+                            <a
+                              href={`https://wa.me/${(b.phone || '').replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[9px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-1.5 py-0.2 rounded border border-emerald-200 transition"
+                              title="Chat on WhatsApp"
+                            >
+                              WA
+                            </a>
+                          </div>
+
+                          {/* Alternate Phone */}
+                          {b.alternate_phone || (b.approver_phone && b.approver_phone !== b.phone) ? (
+                            <div className="flex items-center space-x-1.5 text-slate-600">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" title="Alternate Contact" />
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase">Alt:</span>
+                              <a
+                                href={`tel:${(b.alternate_phone || b.approver_phone || '').replace(/\D/g, '')}`}
+                                className="font-mono text-[11px] font-medium text-slate-700 hover:text-blue-600 hover:underline"
+                                title="Call Alternate Phone"
+                              >
+                                {formatPhone(b.alternate_phone || b.approver_phone)}
+                              </a>
+                              <a
+                                href={`https://wa.me/${(b.alternate_phone || b.approver_phone || '').replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[9px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-1 py-0.2 rounded border border-emerald-200 transition"
+                                title="Chat on WhatsApp (Alternate)"
+                              >
+                                WA
+                              </a>
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-1.5 text-[11px] text-slate-400 font-medium">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-200 shrink-0" />
+                              <span className="text-[10px] text-slate-400 uppercase">Alt:</span>
+                              <span className="italic text-slate-400">None</span>
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* 5. Route (Locations from where to where) */}
@@ -943,6 +1001,80 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                     >
                       WhatsApp
                     </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Phone Numbers & Alternate Contact Section */}
+              <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-900 flex items-center space-x-1">
+                    <Phone className="w-3 h-3 text-blue-600" />
+                    <span>Contact Numbers (Primary & Alternate)</span>
+                  </span>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                    Live Lead Contacts
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                  {/* Primary Phone */}
+                  <div className="p-2.5 rounded-lg bg-white border border-blue-100 shadow-2xs space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Primary Phone Number
+                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-slate-900 text-xs">
+                        {formatPhone(selectedBooking.phone)}
+                      </span>
+                      <div className="flex items-center space-x-1">
+                        <a
+                          href={`tel:${(selectedBooking.phone || '').replace(/\D/g, '')}`}
+                          className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] border border-blue-200 transition"
+                        >
+                          Call
+                        </a>
+                        <a
+                          href={`https://wa.me/${(selectedBooking.phone || '').replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] border border-emerald-200 transition"
+                        >
+                          WhatsApp
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Alternate Phone */}
+                  <div className="p-2.5 rounded-lg bg-white border border-blue-100 shadow-2xs space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                      Alternate Phone Number
+                    </span>
+                    {selectedBooking.alternate_phone || (selectedBooking.approver_phone && selectedBooking.approver_phone !== selectedBooking.phone) ? (
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-slate-900 text-xs">
+                          {formatPhone(selectedBooking.alternate_phone || selectedBooking.approver_phone)}
+                        </span>
+                        <div className="flex items-center space-x-1">
+                          <a
+                            href={`tel:${(selectedBooking.alternate_phone || selectedBooking.approver_phone || '').replace(/\D/g, '')}`}
+                            className="px-2 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] border border-blue-200 transition"
+                          >
+                            Call
+                          </a>
+                          <a
+                            href={`https://wa.me/${(selectedBooking.alternate_phone || selectedBooking.approver_phone || '').replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] border border-emerald-200 transition"
+                          >
+                            WhatsApp
+                          </a>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-400 italic py-0.5">None provided</div>
+                    )}
                   </div>
                 </div>
               </div>

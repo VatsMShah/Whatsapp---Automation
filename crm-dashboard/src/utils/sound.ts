@@ -1,12 +1,10 @@
 /**
- * Sound & Voice Synthesis Engine for Traket CRM Lead Notifications
- * Uses standard Web Audio API for crisp zero-latency chimes
- * Uses Web Speech Synthesis API for automated voice announcements
+ * Sound Engine for Traket CRM Lead Notifications
+ * Uses standard Web Audio API for crisp zero-latency notification chimes
  */
 
 let audioCtx: AudioContext | null = null;
 let isMuted = false;
-let isVoiceEnabled = true;
 
 // Initialize or resume AudioContext safely on first user gesture
 export function initAudioContext(): AudioContext | null {
@@ -42,24 +40,15 @@ export function isAudioMuted(): boolean {
   }
 }
 
-export function setVoiceEnabled(enabled: boolean) {
-  isVoiceEnabled = enabled;
-  try {
-    localStorage.setItem('traket_voice_enabled', enabled ? '1' : '0');
-  } catch (_) {}
-}
+// Retained for backward compatibility as no-ops
+export function setVoiceEnabled(_enabled: boolean) {}
 
 export function isVoiceNotificationEnabled(): boolean {
-  try {
-    const stored = localStorage.getItem('traket_voice_enabled');
-    return stored === null ? true : stored === '1';
-  } catch (_) {
-    return isVoiceEnabled;
-  }
+  return false;
 }
 
 /**
- * Play an elegant high-priority 3-note ascending dispatch chime
+ * Play an elegant high-priority 4-note ascending dispatch chime
  */
 export function playDispatchChime() {
   if (isAudioMuted()) return;
@@ -94,47 +83,13 @@ export function playDispatchChime() {
 }
 
 /**
- * Speak voice announcement for the incoming lead
+ * Voice announcement disabled: keeps only notification sound.
+ * Cancels any active browser speech synthesis.
  */
-export function speakLeadAnnouncement(text: string) {
-  if (isAudioMuted() || !isVoiceNotificationEnabled()) return;
-  if (!('speechSynthesis' in window)) return;
-
+export function speakLeadAnnouncement(_text?: string) {
   try {
-    // Chrome bug fix: resume speech synthesis if paused
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
     }
-    // Cancel any previous pending speech
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.05;
-    utterance.pitch = 1.0;
-    utterance.volume = 0.9;
-
-    // Pick a natural English voice if available
-    const voices = window.speechSynthesis.getVoices();
-    const preferredVoice =
-      voices.find((v) => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('India'))) ||
-      voices.find((v) => v.lang.startsWith('en'));
-
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
-    }
-
-    // Small delay to let the chime ring out first
-    setTimeout(() => {
-      try {
-        if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume();
-        }
-        window.speechSynthesis.speak(utterance);
-      } catch (e) {
-        console.warn('Speech speak failed:', e);
-      }
-    }, 450);
-  } catch (err) {
-    console.warn('Speech synthesis error:', err);
-  }
+  } catch (_) {}
 }

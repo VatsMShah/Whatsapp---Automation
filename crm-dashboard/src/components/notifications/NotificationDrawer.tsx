@@ -12,8 +12,6 @@ import {
   Trash2,
   Volume2,
   VolumeX,
-  Mic,
-  MicOff,
   Flame,
   Check,
   CheckCheck,
@@ -24,10 +22,7 @@ import { LeadNotification } from '../../types';
 import {
   isAudioMuted,
   setAudioMuted,
-  isVoiceNotificationEnabled,
-  setVoiceEnabled,
   playDispatchChime,
-  speakLeadAnnouncement,
 } from '../../utils/sound';
 
 interface NotificationDrawerProps {
@@ -55,7 +50,6 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
 }) => {
   const [filterTab, setFilterTab] = useState<'all' | 'pending' | 'viewed'>('all');
   const [muted, setMuted] = useState<boolean>(() => isAudioMuted());
-  const [voiceEnabled, setVoiceState] = useState<boolean>(() => isVoiceNotificationEnabled());
   const [browserPermission, setBrowserPermission] = useState<string>(() => {
     return typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported';
   });
@@ -79,12 +73,6 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
     setAudioMuted(next);
   };
 
-  const toggleVoice = () => {
-    const next = !voiceEnabled;
-    setVoiceState(next);
-    setVoiceEnabled(next);
-  };
-
   const requestBrowserPermission = async () => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       try {
@@ -102,7 +90,6 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
       onClose();
     } else {
       playDispatchChime();
-      speakLeadAnnouncement('Test lead alert: Mumbai to Ahmedabad truck inquiry.');
     }
   };
 
@@ -186,20 +173,6 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
               >
                 {muted ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
                 <span>{muted ? 'Muted' : 'Sound On'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={toggleVoice}
-                className={`px-2 py-1 rounded-lg border flex items-center space-x-1 font-bold text-[10px] transition cursor-pointer ${
-                  !voiceEnabled
-                    ? 'bg-white border-slate-200 text-slate-600'
-                    : 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                }`}
-                title={voiceEnabled ? 'Disable Voice Alerts' : 'Enable Voice Alerts'}
-              >
-                {voiceEnabled ? <Mic className="w-3 h-3" /> : <MicOff className="w-3 h-3" />}
-                <span>{voiceEnabled ? 'Voice On' : 'Voice Off'}</span>
               </button>
 
               {browserPermission === 'default' && (
@@ -319,7 +292,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                 </h4>
                 <p className="text-xs text-slate-500 max-w-xs mt-1 leading-relaxed">
                   {filterTab === 'pending'
-                    ? 'You have responded to all assigned dispatch leads. Fresh leads will pop up with live voice and sound.'
+                    ? 'You have responded to all assigned dispatch leads. Fresh leads will pop up with notification sound.'
                     : 'Newly assigned freight inquiries will appear here automatically.'}
                 </p>
                 {filterTab !== 'all' && (
