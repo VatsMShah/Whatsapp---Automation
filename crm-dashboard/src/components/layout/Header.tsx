@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, RefreshCw, Download, ShieldCheck, UserCheck, ChevronDown, UserCircle, LogOut, Bell } from 'lucide-react';
+import { Search, RefreshCw, Download, ShieldCheck, UserCheck, ChevronDown, UserCircle, LogOut, Bell, KeyRound } from 'lucide-react';
 import { ClientCompanyProfile, Employee } from '../../types';
 import { UserRole } from '../../context/RoleContext';
 
@@ -16,11 +16,13 @@ interface HeaderProps {
   unreadNotificationsCount?: number;
   onOpenNotifications?: () => void;
   // Role switcher
+  authRole: UserRole | null;
   role: UserRole;
   currentEmployee: Employee | null;
   employees: Employee[];
   onSwitchToAdmin: () => void;
   onSwitchToEmployee: (emp: Employee) => void;
+  onOpenChangePassword?: () => void;
   onLogout?: () => void;
 }
 
@@ -35,14 +37,17 @@ export const Header: React.FC<HeaderProps> = ({
   onExportCsv,
   unreadNotificationsCount = 0,
   onOpenNotifications,
+  authRole,
   role,
   currentEmployee,
   employees,
   onSwitchToAdmin,
   onSwitchToEmployee,
+  onOpenChangePassword,
   onLogout,
 }) => {
   const isAdmin = role === 'admin';
+  const canSwitchRoles = authRole === 'admin';
   const [showRoleMenu, setShowRoleMenu] = useState(false);
 
   return (
@@ -145,57 +150,88 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Dropdown Menu */}
           {showRoleMenu && (
-            <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden">
-              {/* Admin Option */}
-              <button
-                onClick={() => { onSwitchToAdmin(); setShowRoleMenu(false); }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 text-left hover:bg-slate-50 transition ${isAdmin ? 'bg-blue-50' : ''}`}
-              >
-                <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
-                  <ShieldCheck className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">Admin View</div>
-                  <div className="text-[10px] text-slate-500">Full access to all leads & team</div>
-                </div>
-                {isAdmin && <div className="ml-auto w-2 h-2 rounded-full bg-blue-600" />}
-              </button>
+            <div className="absolute right-0 top-full mt-2 w-60 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden">
+              {canSwitchRoles ? (
+                <>
+                  {/* Admin Option (Only visible to JWT-verified Admins) */}
+                  <button
+                    onClick={() => { onSwitchToAdmin(); setShowRoleMenu(false); }}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 text-left hover:bg-slate-50 transition ${isAdmin ? 'bg-blue-50' : ''}`}
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center shrink-0">
+                      <ShieldCheck className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900">Admin View</div>
+                      <div className="text-[10px] text-slate-500">Full access to all leads & team</div>
+                    </div>
+                    {isAdmin && <div className="ml-auto w-2 h-2 rounded-full bg-blue-600" />}
+                  </button>
 
-              <div className="px-4 py-1.5 border-t border-slate-100">
-                <div className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Switch to Employee</div>
-              </div>
+                  <div className="px-4 py-1.5 border-t border-slate-100">
+                    <div className="text-[9px] font-bold uppercase text-slate-400 tracking-wider">Preview Employee View</div>
+                  </div>
 
-              {/* Employee Options */}
-              {employees.filter((e) => e.is_active).map((emp) => (
-                <button
-                  key={emp.employee_id}
-                  onClick={() => { onSwitchToEmployee(emp); setShowRoleMenu(false); }}
-                  className={`w-full flex items-center space-x-3 px-4 py-2.5 text-left hover:bg-slate-50 transition ${
-                    !isAdmin && currentEmployee?.employee_id === emp.employee_id ? 'bg-violet-50' : ''
-                  }`}
-                >
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold text-[10px] shrink-0">
-                    {emp.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                  {/* Employee Options */}
+                  <div className="max-h-56 overflow-y-auto">
+                    {employees.filter((e) => e.is_active).map((emp) => (
+                      <button
+                        key={emp.employee_id}
+                        onClick={() => { onSwitchToEmployee(emp); setShowRoleMenu(false); }}
+                        className={`w-full flex items-center space-x-3 px-4 py-2.5 text-left hover:bg-slate-50 transition ${
+                          !isAdmin && currentEmployee?.employee_id === emp.employee_id ? 'bg-violet-50' : ''
+                        }`}
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold text-[10px] shrink-0">
+                          {emp.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold text-slate-800 truncate">{emp.name}</div>
+                          <div className="text-[10px] text-slate-500 truncate">{emp.employee_id} · {emp.department}</div>
+                        </div>
+                        {!isAdmin && currentEmployee?.employee_id === emp.employee_id && (
+                          <div className="ml-auto w-2 h-2 rounded-full bg-violet-600 shrink-0" />
+                        )}
+                      </button>
+                    ))}
                   </div>
-                  <div>
-                    <div className="text-xs font-semibold text-slate-800">{emp.name}</div>
-                    <div className="text-[10px] text-slate-500">{emp.employee_id} · {emp.department}</div>
-                  </div>
-                  {!isAdmin && currentEmployee?.employee_id === emp.employee_id && (
-                    <div className="ml-auto w-2 h-2 rounded-full bg-violet-600" />
+
+                  {employees.filter((e) => e.is_active).length === 0 && (
+                    <div className="px-4 py-3 text-xs text-slate-400 text-center">
+                      No employees added yet
+                    </div>
                   )}
-                </button>
-              ))}
-
-              {employees.filter((e) => e.is_active).length === 0 && (
-                <div className="px-4 py-3 text-xs text-slate-400 text-center">
-                  No employees added yet
+                </>
+              ) : (
+                <div className="px-4 py-3 bg-violet-50/60 border-b border-slate-100">
+                  <div className="text-xs font-bold text-slate-900 truncate">
+                    {currentEmployee?.name || 'Employee'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 truncate">
+                    {currentEmployee?.employee_id || ''}{currentEmployee?.department ? ` · ${currentEmployee.department}` : ''}
+                  </div>
+                  <div className="text-[10px] font-semibold text-violet-700 mt-1">
+                    Signed in as Specialist
+                  </div>
                 </div>
               )}
 
-              {/* Logout Option */}
-              {onLogout && (
-                <div className="p-1.5 border-t border-slate-100 bg-slate-50/60">
+              {/* Account Actions */}
+              <div className="p-1.5 border-t border-slate-100 bg-slate-50/60 space-y-1">
+                {onOpenChangePassword && (
+                  <button
+                    onClick={() => {
+                      setShowRoleMenu(false);
+                      onOpenChangePassword();
+                    }}
+                    className="w-full flex items-center space-x-2.5 px-3 py-2 text-slate-700 hover:bg-white hover:shadow-2xs rounded-xl transition text-xs font-semibold cursor-pointer"
+                  >
+                    <KeyRound className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Change Password</span>
+                  </button>
+                )}
+
+                {onLogout && (
                   <button
                     onClick={() => {
                       setShowRoleMenu(false);
@@ -206,8 +242,8 @@ export const Header: React.FC<HeaderProps> = ({
                     <LogOut className="w-3.5 h-3.5" />
                     <span>Log Out from CRM</span>
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 

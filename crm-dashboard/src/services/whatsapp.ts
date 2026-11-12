@@ -1,14 +1,10 @@
-export const WHATSAPP_ACCESS_TOKEN =
-  import.meta.env.VITE_WHATSAPP_ACCESS_TOKEN ||
-  'EAAZAZB0gvhrGUBSDVyHhhTgWJYVAE0F8kTOSGAFLFyLtTwYGcgDczYSxySO2XlIZAAkXKYQP0mOqYKLpyZAE2Jn0pTWOfZAHNaS3Ki0Hq8QHfUi5af4C1RucZCiTmRaPohqvVy6jlfqkZBxCsHOBYCbUMlcLBqNIdB4DYFpCBH5BMXJbE0ydYJxw6Ht7oj0PiM8qAZDZD';
-
-export const WHATSAPP_PHONE_NUMBER_ID =
-  import.meta.env.VITE_WHATSAPP_PHONE_NUMBER_ID || '1240163099173755';
+const AUTH_URL = import.meta.env.VITE_AUTH_URL || 'http://localhost:3005/api/auth';
+const API_BASE = AUTH_URL.replace(/\/api\/auth\/?$/, '');
 
 export const SUPPORT_PHONE_DISPLAY = '+91 9820500159';
 
 /**
- * Send WhatsApp plain text message directly via Meta Cloud API from official Traket number
+ * Send WhatsApp plain text message via secure local backend proxy (no client-side token exposure)
  */
 export async function sendWhatsAppNudge(
   to: string,
@@ -18,39 +14,32 @@ export async function sendWhatsAppNudge(
     const cleanTo = to.replace(/[^0-9]/g, '');
     const recipient = cleanTo.length === 10 ? `91${cleanTo}` : cleanTo;
 
-    const url = `https://graph.facebook.com/v21.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
-    const res = await fetch(url, {
+    const res = await fetch(`${API_BASE}/api/whatsapp/send`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        messaging_product: 'whatsapp',
         to: recipient,
         type: 'text',
-        text: { body: message },
+        text: message,
       }),
     });
 
     const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const errorMessage = data?.error?.message || `Meta API error (${res.status})`;
-      console.error('Meta API error sending text message:', data);
-      return { success: false, error: errorMessage };
+    if (!res.ok || !data.success) {
+      return { success: false, error: data?.error || `Server error (${res.status})` };
     }
 
-    const messageId = data?.messages?.[0]?.id;
-    return { success: true, messageId };
+    return { success: true, messageId: data.messageId };
   } catch (err: any) {
-    console.error('Network error sending WhatsApp text message:', err);
+    console.error('Error sending WhatsApp text message:', err);
     return { success: false, error: err.message || 'Network error' };
   }
 }
 
 /**
- * Send WhatsApp Interactive Quick-Reply Buttons message via Meta Cloud API
+ * Send WhatsApp Interactive Quick-Reply Buttons message via secure local backend proxy
  */
 export async function sendWhatsAppInteractiveButtons(
   to: string,
@@ -61,46 +50,27 @@ export async function sendWhatsAppInteractiveButtons(
     const cleanTo = to.replace(/[^0-9]/g, '');
     const recipient = cleanTo.length === 10 ? `91${cleanTo}` : cleanTo;
 
-    const url = `https://graph.facebook.com/v21.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
-    const res = await fetch(url, {
+    const res = await fetch(`${API_BASE}/api/whatsapp/send`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
         to: recipient,
         type: 'interactive',
-        interactive: {
-          type: 'button',
-          body: { text: bodyText },
-          action: {
-            buttons: buttons.map((b) => ({
-              type: 'reply',
-              reply: {
-                id: b.id,
-                title: b.title.slice(0, 20), // Meta limit: 20 chars max
-              },
-            })),
-          },
-        },
+        bodyText,
+        buttons,
       }),
     });
 
     const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const errorMessage = data?.error?.message || `Meta API error (${res.status})`;
-      console.error('Meta API error sending interactive buttons:', data);
-      return { success: false, error: errorMessage };
+    if (!res.ok || !data.success) {
+      return { success: false, error: data?.error || `Server error (${res.status})` };
     }
 
-    const messageId = data?.messages?.[0]?.id;
-    return { success: true, messageId };
+    return { success: true, messageId: data.messageId };
   } catch (err: any) {
-    console.error('Network error sending WhatsApp buttons:', err);
+    console.error('Error sending WhatsApp buttons:', err);
     return { success: false, error: err.message || 'Network error' };
   }
 }

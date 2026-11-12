@@ -11,6 +11,7 @@ import {
   TraketVehicleType,
 } from '../types';
 import { resolvePinCode, estimateDistanceKm } from '../utils/pinResolver';
+import { authService } from './auth';
 
 export const SUPABASE_URL =
   import.meta.env.VITE_SUPABASE_URL || 'https://njmzdeddmangggeukjce.supabase.co';
@@ -524,100 +525,52 @@ class SupabaseDataService {
     }
   }
 
+  // Clear cached CRM/auth storage on logout so sensitive data never persists across sessions
+  clearLocalCaches(): void {
+    authService.clearStoredAuth();
+    try {
+      const keysToRemove = [
+        'traket_employees',
+        'traket_cached_bookings',
+        'traket_cached_bookings_timestamp',
+        'traket_lead_statuses',
+        'traket_assignments',
+        'traket_session_assignments',
+        'traket_session_reminder_logs',
+      ];
+      for (const k of keysToRemove) {
+        localStorage.removeItem(k);
+        sessionStorage.removeItem(k);
+      }
+    } catch {}
+  }
+
   // --- EMPLOYEES ---
   async getEmployees(): Promise<Employee[]> {
-    try {
-      const { data, error } = await this.client
-        .from('employees')
-        .select('*')
-        .order('created_at', { ascending: true });
-      if (error || !data) return this.getLocalEmployees();
-
-      // Merge with local storage for custom fields like assigned_vehicles & assigned_subtypes
-      const localEmps = this.getLocalEmployees();
-      const localMap = new Map(localEmps.map((e) => [e.employee_id, e]));
-      const merged: Employee[] = (data as any[]).map((d) => {
-        const local = localMap.get(d.employee_id);
-        return {
-          ...d,
-          assigned_vehicles: d.assigned_vehicles || local?.assigned_vehicles || [],
-          assigned_subtypes: d.assigned_subtypes || local?.assigned_subtypes || [],
-        };
-      });
-
-      localStorage.setItem('traket_employees', JSON.stringify(merged));
-      return merged;
-    } catch {
-      return this.getLocalEmployees();
+    if (!authService.getStoredToken()) {
+      return [];
     }
+    try {
+      localStorage.removeItem('traket_employees');
+    } catch {}
+
+    const res = await authService.getEmployees();
+    if (!res.success) {
+      return [];
+    }
+    return res.employees;
   }
 
   getLocalEmployees(): Employee[] {
-    try {
-      const stored = localStorage.getItem('traket_employees');
-      if (stored) {
-        const parsed = JSON.parse(stored) as Employee[];
-        // Filter out old dummy seed entries if present
-        const dummyEmails = ['preet@traket.in', 'vatsal@traket.in', 'anil@traket.in'];
-        const dummyNames = ['preet karani', 'vatsal shah', 'anil kumar'];
-        const cleaned = parsed.filter(
-          (e) =>
-            !dummyEmails.includes(e.email?.toLowerCase().trim() || '') &&
-            !dummyNames.includes(e.name?.toLowerCase().trim() || '')
-        );
-        if (cleaned.length !== parsed.length) {
-          localStorage.setItem('traket_employees', JSON.stringify(cleaned));
-        }
-        return cleaned;
-      }
-    } catch {}
     return [];
   }
 
   async upsertEmployee(emp: Omit<Employee, 'id' | 'created_at'>): Promise<Employee | null> {
-    const all = this.getLocalEmployees();
-    const exists = all.findIndex((e) => e.employee_id === emp.employee_id);
-    const newEmp: Employee = {
-      ...emp,
-      id: emp.employee_id,
-      created_at: new Date().toISOString(),
-      assigned_vehicles: emp.assigned_vehicles || [],
-      assigned_subtypes: emp.assigned_subtypes || [],
-    };
-    if (exists >= 0) all[exists] = newEmp;
-    else all.push(newEmp);
-    localStorage.setItem('traket_employees', JSON.stringify(all));
-
-    try {
-      const payload: any = { ...emp, updated_at: new Date().toISOString() };
-      let { data, error } = await this.client
-        .from('employees')
-        .upsert(payload, { onConflict: 'employee_id' })
-        .select()
-        .single();
-
-      if (error && (error.message?.includes('assigned_vehicles') || error.message?.includes('assigned_subtypes'))) {
-        const { assigned_vehicles, assigned_subtypes, ...rest } = payload;
-        const retryRes = await this.client
-          .from('employees')
-          .upsert(rest, { onConflict: 'employee_id' })
-          .select()
-          .single();
-        data = retryRes.data;
-        error = retryRes.error;
-      }
-
-      if (data) {
-        return {
-          ...data,
-          assigned_vehicles: emp.assigned_vehicles || [],
-          assigned_subtypes: emp.assigned_subtypes || [],
-        } as Employee;
-      }
-    } catch (e) {
-      console.warn('Supabase upsertEmployee fallback to local storage:', e);
+    const res = await authService.upsertEmployee(emp);
+    if (!res.success || !res.employee) {
+      throw new Error(res.error || 'Failed to save employee.');
     }
-    return newEmp;
+    return res.employee;
   }
 
   // --- VEHICLE AUTO LEAD ASSIGNMENT ---
@@ -660,38 +613,12 @@ class SupabaseDataService {
       loadMap.set(e.employee_id, 0);
     });
 
-    // 1. AUDIT & CLEAN UP MISMATCHED ASSIGNMENTS:
-    // If a lead was auto-assigned (not manually transferred) to an employee who does NOT handle
-    // that specific vehicle category, clear that assignment so non-truck leads are removed from truck-only employees.
+    // 1. Audit existing assignments: Count active loads and respect all manual assignments
     for (const b of bookings) {
       const existing = updated[b.user_id];
       if (existing?.assigned_to) {
-        // If it was manually transferred by admin, respect manual override
-        if (existing.transferred_from || existing.transfer_note?.startsWith('Transferred')) {
-          const count = loadMap.get(existing.assigned_to) || 0;
-          loadMap.set(existing.assigned_to, count + 1);
-          continue;
-        }
-
-        const assignedEmp = empMap.get(existing.assigned_to);
-        const vehicleCat = categorizeVehicle(b.vehicle_or_container, b.cargo_type);
-
-        // Check if assigned employee is active and specialized in this vehicle category
-        const isSpecialist =
-          assignedEmp &&
-          assignedEmp.is_active &&
-          Array.isArray(assignedEmp.assigned_vehicles) &&
-          assignedEmp.assigned_vehicles.includes(vehicleCat as any);
-
-        if (!isSpecialist) {
-          // Employee doesn't handle this vehicle! Clear the mismatched assignment
-          delete updated[b.user_id];
-          modified = true;
-          this.unassignLead(b.user_id).catch(() => {});
-        } else {
-          const count = loadMap.get(existing.assigned_to) || 0;
-          loadMap.set(existing.assigned_to, count + 1);
-        }
+        const count = loadMap.get(existing.assigned_to) || 0;
+        loadMap.set(existing.assigned_to, count + 1);
       }
     }
 
@@ -707,8 +634,9 @@ class SupabaseDataService {
     // If specialists configured for that specific subtype/weight exist, prioritize them!
     // If no matching employee exists, KEEP IT UNASSIGNED.
     for (const b of bookings) {
-      // Skip if already assigned
-      if (updated[b.user_id]?.assigned_to) continue;
+      // Skip if already assigned or explicitly manually unassigned by Admin
+      const existing = updated[b.user_id];
+      if (existing?.assigned_to || existing?.transfer_note === 'Manual Unassign') continue;
 
       const vehicleCat = categorizeVehicle(b.vehicle_or_container, b.cargo_type);
 
@@ -784,13 +712,10 @@ class SupabaseDataService {
   }
 
   async deactivateEmployee(employeeId: string): Promise<boolean> {
-    try {
-      await this.client.from('employees').update({ is_active: false }).eq('employee_id', employeeId);
-    } catch {}
-    const all = this.getLocalEmployees().map((e) =>
-      e.employee_id === employeeId ? { ...e, is_active: false } : e
-    );
-    localStorage.setItem('traket_employees', JSON.stringify(all));
+    const res = await authService.deactivateEmployee(employeeId);
+    if (!res.success) {
+      throw new Error(res.error || 'Failed to deactivate employee.');
+    }
     return true;
   }
 
@@ -803,11 +728,12 @@ class SupabaseDataService {
         .select('user_id, assigned_to, assigned_at, transferred_from, transfer_note')
         .not('assigned_to', 'is', null);
 
-      if (!error && data) {
-        const merged: Record<string, LeadAssignment> = { ...local };
+      if (!error && Array.isArray(data)) {
+        // Database is the authoritative source of truth for active assignments
+        const fresh: Record<string, LeadAssignment> = {};
         for (const row of data as any[]) {
           if (row.user_id && row.assigned_to) {
-            merged[row.user_id] = {
+            fresh[row.user_id] = {
               user_id: row.user_id,
               assigned_to: row.assigned_to,
               assigned_at: row.assigned_at || new Date().toISOString(),
@@ -816,8 +742,8 @@ class SupabaseDataService {
             };
           }
         }
-        localStorage.setItem('traket_assignments', JSON.stringify(merged));
-        return merged;
+        localStorage.setItem('traket_assignments', JSON.stringify(fresh));
+        return fresh;
       }
     } catch {}
     return local;
@@ -843,12 +769,14 @@ class SupabaseDataService {
       assigned_at: new Date().toISOString(),
     };
     this.setLocalAssignment(userId, assignment);
-    try {
-      await this.client.from('lead_status').upsert(
-        { user_id: userId, assigned_to: employeeId, assigned_at: assignment.assigned_at },
-        { onConflict: 'user_id' }
-      );
-    } catch {}
+    const { error } = await this.client.from('lead_status').upsert(
+      { user_id: userId, assigned_to: employeeId, assigned_at: assignment.assigned_at },
+      { onConflict: 'user_id' }
+    );
+    if (error) {
+      console.error('Supabase assignLead error:', error);
+      throw new Error(error.message || 'Failed to assign lead in Supabase');
+    }
     return true;
   }
 
@@ -856,12 +784,14 @@ class SupabaseDataService {
     const all = this.getLocalAssignments();
     delete all[userId];
     localStorage.setItem('traket_assignments', JSON.stringify(all));
-    try {
-      await this.client.from('lead_status').upsert(
-        { user_id: userId, assigned_to: null, assigned_at: null },
-        { onConflict: 'user_id' }
-      );
-    } catch {}
+    const { error } = await this.client.from('lead_status').upsert(
+      { user_id: userId, assigned_to: null, assigned_at: null, transfer_note: 'Manual Unassign' },
+      { onConflict: 'user_id' }
+    );
+    if (error) {
+      console.error('Supabase unassignLead error:', error);
+      throw new Error(error.message || 'Failed to unassign lead in Supabase');
+    }
     return true;
   }
 
@@ -875,18 +805,20 @@ class SupabaseDataService {
       transfer_note: transferNote,
     };
     this.setLocalAssignment(userId, assignment);
-    try {
-      await this.client.from('lead_status').upsert(
-        {
-          user_id: userId,
-          assigned_to: newEmployeeId,
-          assigned_at: assignment.assigned_at,
-          transferred_from: assignment.transferred_from,
-          transfer_note: transferNote,
-        },
-        { onConflict: 'user_id' }
-      );
-    } catch {}
+    const { error } = await this.client.from('lead_status').upsert(
+      {
+        user_id: userId,
+        assigned_to: newEmployeeId,
+        assigned_at: assignment.assigned_at,
+        transferred_from: assignment.transferred_from,
+        transfer_note: transferNote,
+      },
+      { onConflict: 'user_id' }
+    );
+    if (error) {
+      console.error('Supabase transferLead error:', error);
+      throw new Error(error.message || 'Failed to transfer lead in Supabase');
+    }
     return true;
   }
 

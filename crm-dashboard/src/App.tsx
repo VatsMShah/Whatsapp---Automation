@@ -9,7 +9,9 @@ import { ArchiveDesk } from './components/archive/ArchiveDesk';
 import { PriorityDispatchModal } from './components/notifications/PriorityDispatchModal';
 import { NotificationDrawer } from './components/notifications/NotificationDrawer';
 import { LoginPage } from './components/auth/LoginPage';
+import { ChangePasswordModal } from './components/auth/ChangePasswordModal';
 import { RoleProvider, useRole } from './context/RoleContext';
+import { Loader2, Truck } from 'lucide-react';
 import { dbService, ACTIVE_CLIENT_PROFILE } from './services/supabase';
 import {
   initAudioContext,
@@ -39,17 +41,23 @@ const getRoleKey = (currentRole: string, activeEmployee: Employee | null) => {
 function AppInner() {
   const {
     isAuthenticated,
+    isAuthChecking,
+    authRole,
     role,
+    currentAdmin,
     currentEmployee,
+    mustChangePassword,
     switchToAdmin,
     switchToEmployee,
     loginAsAdmin,
     loginAsEmployee,
+    clearMustChangePassword,
     logout,
   } = useRole();
   const isAdmin = role === 'admin';
 
   const [currentTab, setCurrentTab] = useState<DashboardTab>('orders');
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [clientProfile] = useState<ClientCompanyProfile>(ACTIVE_CLIENT_PROFILE);
 
   // Core Data State
@@ -100,15 +108,9 @@ function AppInner() {
       setSupportTickets(t || []);
       setEmployees(emps || []);
 
-      let currentAssignments = await dbService.getAssignments();
+      const currentAssignments = await dbService.getAssignments();
 
-      // If vehicle auto-lead assignment is enabled, auto-assign unassigned leads based on vehicle type
-      if (b && b.length > 0 && emps && emps.length > 0 && dbService.isAutoLeadAssignmentEnabled()) {
-        const autoRes = await dbService.autoAssignBookingsByVehicle(b, emps, currentAssignments);
-        currentAssignments = autoRes.updatedAssignments;
-      }
-
-      // Load assignments from local cache (also synced to Supabase)
+      // Load assignments from local cache / database
       setAssignments(currentAssignments);
 
       // Evaluate and trigger lead notifications
@@ -231,12 +233,29 @@ function AppInner() {
   };
 
   useEffect(() => {
+    if (isAuthChecking) return;
+
+    if (!isAuthenticated) {
+      setBookings([]);
+      setSessions([]);
+      setSupportTickets([]);
+      setEmployees([]);
+      setAssignments({});
+      setNotifications([]);
+      setActiveDispatchAlert(null);
+      setIsNotificationDrawerOpen(false);
+      setIsChangePasswordOpen(false);
+      setCurrentTab('orders');
+      dbService.clearLocalCaches();
+      return;
+    }
+
     loadData();
     const interval = setInterval(() => {
       loadData();
     }, 20000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isAuthenticated, isAuthChecking]);
 
   // When role or active employee changes, refresh notifications
   useEffect(() => {
@@ -247,7 +266,7 @@ function AppInner() {
 
   // If employee switches to a tab they can't access, reset to orders
   useEffect(() => {
-    if (!isAdmin && (currentTab === 'overview' || currentTab === 'team')) {
+    if (!isAdmin && (currentTab === 'overview' || currentTab === 'team' || currentTab === 'archive')) {
       setCurrentTab('orders');
     }
   }, [isAdmin, currentTab]);
@@ -418,17 +437,27 @@ function AppInner() {
   };
 
   const handleAssignLead = async (userId: string, employeeId: string) => {
-    if (!employeeId) {
-      await dbService.unassignLead(userId);
-    } else {
-      await dbService.assignLead(userId, employeeId);
+    try {
+      if (!employeeId) {
+        await dbService.unassignLead(userId);
+      } else {
+        await dbService.assignLead(userId, employeeId);
+      }
+      setAssignments(dbService.getLocalAssignments());
+    } catch (err: any) {
+      console.error('Failed to update lead assignment:', err);
+      alert(`Assignment update failed: ${err?.message || 'Unable to update Supabase database'}`);
     }
-    setAssignments(dbService.getLocalAssignments());
   };
 
   const handleTransferLead = async (userId: string, newEmployeeId: string, note: string) => {
-    await dbService.transferLead(userId, newEmployeeId, note);
-    setAssignments(dbService.getLocalAssignments());
+    try {
+      await dbService.transferLead(userId, newEmployeeId, note);
+      setAssignments(dbService.getLocalAssignments());
+    } catch (err: any) {
+      console.error('Failed to transfer lead:', err);
+      alert(`Lead transfer failed: ${err?.message || 'Unable to update Supabase database'}`);
+    }
   };
 
   const handleToggleAutoLead = (enabled: boolean) => {
@@ -444,13 +473,13 @@ function AppInner() {
 
   const handleSaveEmployee = async (emp: Omit<Employee, 'id' | 'created_at'>) => {
     await dbService.upsertEmployee(emp);
-    const updated = dbService.getLocalEmployees();
+    const updated = await dbService.getEmployees();
     setEmployees(updated);
   };
 
   const handleDeactivateEmployee = async (employeeId: string) => {
     await dbService.deactivateEmployee(employeeId);
-    const updated = dbService.getLocalEmployees();
+    const updated = await dbService.getEmployees();
     setEmployees(updated);
   };
 
@@ -458,31 +487,41 @@ function AppInner() {
     if (bookings.length === 0) return;
 
     const headers = [
-      'Date', 'Status', 'Origin', 'Destination', 'Cargo Type',
-      'Vehicle / Container', 'Weight', 'Loading Date', 'Time Slot',
+      'Date', 'Status', 'Assigned Specialist', 'Specialist ID', 'Assignment Date', 'Transfer Note',
+      'Origin', 'Destination', 'Cargo Type', 'Vehicle / Container', 'Weight', 'Loading Date', 'Time Slot',
       'Commercial Approver', 'Approver Phone', 'Approver Role', 'Authority Type',
       'Lead Submitter', 'Submitter Phone', 'Company Name', 'Remarks',
     ];
 
-    const rows = bookings.map((b) => [
-      `"${new Date(b.updated_at).toLocaleDateString()}"`,
-      `"${b.status}"`,
-      `"${b.originCity || b.origin}"`,
-      `"${b.destinationCity || b.destination}"`,
-      `"${b.cargo_type}"`,
-      `"${b.vehicle_or_container}"`,
-      `"${b.weight}"`,
-      `"${b.loading_date}"`,
-      `"${b.time_slot}"`,
-      `"${b.approver_name || b.contact_name || ''}"`,
-      `"${b.approver_phone || b.alternate_phone || b.phone || ''}"`,
-      `"${b.approver_role || ''}"`,
-      `"${b.is_decision_maker === false ? 'Corporate (On Behalf)' : 'Direct Decision-Maker (Self)'}"`,
-      `"${b.submitter_name || b.contact_name || ''}"`,
-      `"${b.submitter_phone || b.phone || ''}"`,
-      `"${b.company_name}"`,
-      `"${(b.remarks || '').replace(/"/g, '""')}"`,
-    ]);
+    const rows = bookings.map((b) => {
+      const assignment = assignments[b.user_id];
+      const assignedEmp = assignment?.assigned_to
+        ? employees.find((e) => e.employee_id === assignment.assigned_to)
+        : null;
+      return [
+        `"${new Date(b.updated_at).toLocaleDateString()}"`,
+        `"${b.status}"`,
+        `"${assignedEmp?.name || 'Unassigned'}"`,
+        `"${assignedEmp?.employee_id || ''}"`,
+        `"${assignment?.assigned_at ? new Date(assignment.assigned_at).toLocaleDateString() : ''}"`,
+        `"${(assignment?.transfer_note || '').replace(/"/g, '""')}"`,
+        `"${b.originCity || b.origin}"`,
+        `"${b.destinationCity || b.destination}"`,
+        `"${b.cargo_type}"`,
+        `"${b.vehicle_or_container}"`,
+        `"${b.weight}"`,
+        `"${b.loading_date}"`,
+        `"${b.time_slot}"`,
+        `"${b.approver_name || b.contact_name || ''}"`,
+        `"${b.approver_phone || b.alternate_phone || b.phone || ''}"`,
+        `"${b.approver_role || ''}"`,
+        `"${b.is_decision_maker === false ? 'Corporate (On Behalf)' : 'Direct Decision-Maker (Self)'}"`,
+        `"${b.submitter_name || b.contact_name || ''}"`,
+        `"${b.submitter_phone || b.phone || ''}"`,
+        `"${b.company_name}"`,
+        `"${(b.remarks || '').replace(/"/g, '""')}"`,
+      ];
+    });
 
     const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -534,13 +573,26 @@ function AppInner() {
 
   const { title, subtitle } = getTabHeader();
 
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen w-full bg-slate-50 text-slate-800 flex flex-col items-center justify-center p-6">
+        <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-sm mb-4">
+          <Truck className="w-6 h-6" />
+        </div>
+        <div className="flex items-center space-x-2.5 text-sm font-semibold text-slate-700">
+          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+          <span>Verifying Traket CRM session...</span>
+        </div>
+      </div>
+    );
+  }
+
   // If not authenticated, render the high-end Traket Logistics Login Portal
   if (!isAuthenticated) {
     return (
       <LoginPage
-        employees={employees}
         onLoginAdmin={loginAsAdmin}
-        onLoginEmployee={(id, pass) => loginAsEmployee(id, pass, employees)}
+        onLoginEmployee={loginAsEmployee}
       />
     );
   }
@@ -571,13 +623,15 @@ function AppInner() {
           onRefreshData={loadData}
           isRefreshing={isRefreshing}
           onExportCsv={handleExportCsv}
-          unreadNotificationsCount={isAdmin ? 0 : notifications.filter((n) => n.status === 'pending').length}
-          onOpenNotifications={isAdmin ? undefined : () => setIsNotificationDrawerOpen(true)}
+          unreadNotificationsCount={notifications.filter((n) => n.status === 'pending').length}
+          onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
+          authRole={authRole}
           role={role}
           currentEmployee={currentEmployee}
           employees={employees}
           onSwitchToAdmin={switchToAdmin}
           onSwitchToEmployee={switchToEmployee}
+          onOpenChangePassword={() => setIsChangePasswordOpen(true)}
           onLogout={logout}
         />
 
@@ -662,6 +716,23 @@ function AppInner() {
         onMarkAllSeen={handleMarkAllSeenNotifications}
         onMarkSeen={handleMarkSeenNotification}
         onTriggerTestAlert={handleTriggerTestAlert}
+      />
+
+      {/* Change Password Modal (manual or forced first-login default password rotation) */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen || mustChangePassword}
+        forced={mustChangePassword}
+        userLabel={
+          authRole === 'admin'
+            ? `${currentAdmin?.name || 'Administrator'} (${currentAdmin?.email || 'admin'})`
+            : `${currentEmployee?.name || 'Employee'} (${currentEmployee?.employee_id || ''})`
+        }
+        onClose={() => setIsChangePasswordOpen(false)}
+        onSuccess={() => {
+          clearMustChangePassword();
+          setIsChangePasswordOpen(false);
+        }}
+        onLogout={logout}
       />
     </div>
   );

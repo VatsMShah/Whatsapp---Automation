@@ -3,6 +3,8 @@ const config = require('./config');
 const logger = require('./utils/logger');
 const { handleVerification, isValidSignature } = require('./webhook/verify');
 const { handleIncomingMessage } = require('./webhook/handler');
+const { handleAuthRequest } = require('./routes/auth');
+const whatsapp = require('./services/whatsapp');
 
 const app = express();
 
@@ -10,7 +12,7 @@ const app = express();
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, apikey, x-traket-token');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
@@ -28,6 +30,32 @@ app.use(
 );
 
 app.get('/health', (_req, res) => res.status(200).send('ok'));
+
+// Local JWT Auth API (runs solely on local Node server during testing)
+app.post('/api/auth', handleAuthRequest);
+
+// Secure backend proxy for WhatsApp dispatch (keeps Meta token off the client)
+app.post('/api/whatsapp/send', async (req, res) => {
+  try {
+    const { to, type, text, bodyText, buttons } = req.body || {};
+    if (!to) {
+      return res.status(400).json({ success: false, error: 'Recipient phone number is required.' });
+    }
+
+    let result;
+    if (type === 'interactive' && Array.isArray(buttons)) {
+      result = await whatsapp.sendInteractiveButtons(to, bodyText || text || '', buttons);
+    } else {
+      result = await whatsapp.sendText(to, text || bodyText || '');
+    }
+
+    const messageId = result?.messages?.[0]?.id;
+    return res.json({ success: true, messageId });
+  } catch (err) {
+    logger.error('API WhatsApp dispatch error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to send WhatsApp message' });
+  }
+});
 
 // Auto-reminders API
 const reminders = require('./services/reminders');

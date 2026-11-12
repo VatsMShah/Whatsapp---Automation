@@ -25,6 +25,10 @@ module.exports = {
   supabase: {
     url: required('SUPABASE_URL'),
     key: required('SUPABASE_KEY'),
+    serviceRoleKey: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(),
+  },
+  auth: {
+    jwtSecret: (process.env.AUTH_JWT_SECRET || '').trim(),
   },
   google: {
     sheetId: process.env.GOOGLE_SHEET_ID || '1IdG2oaGPdGDzY4H5JwPa0eeHKdXzivMNwkhBslJ5ZUI',

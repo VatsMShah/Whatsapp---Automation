@@ -72,6 +72,8 @@ export interface Employee {
   phone?: string;
   department?: string;
   password?: string;
+  has_password?: boolean;
+  must_change_password?: boolean;
   role?: 'admin' | 'employee';
   is_active: boolean;
   created_at: string;

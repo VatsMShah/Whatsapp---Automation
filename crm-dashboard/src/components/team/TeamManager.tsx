@@ -42,6 +42,7 @@ import {
   Search,
   Filter,
   Clock,
+  Loader2,
 } from 'lucide-react';
 import { Employee, FreightBooking, LeadAssignment, TRAKET_VEHICLES, TraketVehicleType } from '../../types';
 
@@ -99,10 +100,21 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
   const [form, setForm] = useState(emptyForm());
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [formError, setFormError] = useState('');
   const [confirmDeactivate, setConfirmDeactivate] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [revealedPasswords, setRevealedPasswords] = useState<Record<string, boolean>>({});
+  const [savedCredentials, setSavedCredentials] = useState<{
+    name: string;
+    employee_id: string;
+    email?: string;
+    phone?: string;
+    password: string;
+    department?: string;
+    assigned_vehicles?: string[];
+  } | null>(null);
+  const [copiedSavedBanner, setCopiedSavedBanner] = useState(false);
   const [isTriggeringAuto, setIsTriggeringAuto] = useState(false);
+  const [reactivatingId, setReactivatingId] = useState<string | null>(null);
   const [customSubtypeInputs, setCustomSubtypeInputs] = useState<Record<string, string>>({});
   const [customSubtypesByVehicle, setCustomSubtypesByVehicle] = useState<Record<string, string[]>>(() => {
     try {
@@ -149,6 +161,7 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
     const nextId = getNextEmployeeId(employees);
     setEditingEmployee(null);
     setForm(emptyForm(nextId));
+    setFormError('');
     setShowPassword(false);
     setCustomSubtypeInputs({});
     setExpandedVehicles({}); // Start collapsed for clean, uncluttered UX
@@ -165,11 +178,12 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
       phone: emp.phone || '',
       department: emp.department || 'Sales',
       role: emp.role || 'employee',
-      password: emp.password || '',
+      password: '',
       is_active: emp.is_active,
       assigned_vehicles: emp.assigned_vehicles || [],
       assigned_subtypes: emp.assigned_subtypes || [],
     });
+    setFormError('');
     setExpandedVehicles({});
     setCustomSubtypeInputs({});
     setActiveModalTab('profile');
@@ -183,13 +197,19 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
           TRAKET_VEHICLES.flatMap((v) => v.subtypes.map((s) => s.id))
         );
         const assignedVehs = emp.assigned_vehicles || [];
-        const defaultVeh = assignedVehs.length === 1 ? assignedVehs[0] : 'Truck';
-
         emp.assigned_subtypes?.forEach((st) => {
           if (!allBuiltinIds.has(st)) {
-            const list = next[defaultVeh] || [];
+            const stLower = st.toLowerCase();
+            let targetVeh = assignedVehs[0] || 'Truck';
+            for (const v of assignedVehs) {
+              if (stLower.includes(v.toLowerCase())) {
+                targetVeh = v;
+                break;
+              }
+            }
+            const list = next[targetVeh] || [];
             if (!list.includes(st)) {
-              next[defaultVeh] = [...list, st];
+              next[targetVeh] = [...list, st];
               changed = true;
             }
           }
@@ -435,10 +455,9 @@ export const TeamManager: React.FC<TeamManagerProps> = ({
 ------------------------------------
 Employee Name : ${formatName(emp.name)}
 Employee ID   : ${emp.employee_id}
-Username/Email: ${emp.email || 'N/A'}
-Phone         : ${emp.phone || 'N/A'}
-Password      : ${emp.password || '(not set)'}
+Login Email   : ${emp.email || 'Use Employee ID'}
 Department    : ${emp.department || 'Operations'}
+Password      : (Encrypted — use Reset/Forgot Password if needed)
 Specializations: ${(emp.assigned_vehicles || []).join(', ') || 'None'}
 ------------------------------------
 Portal URL    : ${window.location.origin}`;
@@ -447,16 +466,70 @@ Portal URL    : ${window.location.origin}`;
     setTimeout(() => setCopiedId(null), 2500);
   };
 
-  const togglePasswordReveal = (empId: string) => {
-    setRevealedPasswords((prev) => ({ ...prev, [empId]: !prev[empId] }));
+  const handleCopySavedCredentials = () => {
+    if (!savedCredentials) return;
+    const text = `Traket Transport CRM Access:
+------------------------------------
+Employee Name : ${formatName(savedCredentials.name)}
+Employee ID   : ${savedCredentials.employee_id}
+Login Email   : ${savedCredentials.email || 'Use Employee ID'}
+Phone         : ${savedCredentials.phone || 'N/A'}
+Password      : ${savedCredentials.password}
+Department    : ${savedCredentials.department || 'Operations'}
+Specializations: ${(savedCredentials.assigned_vehicles || []).join(', ') || 'None'}
+------------------------------------
+Portal URL    : ${window.location.origin}`;
+    navigator.clipboard.writeText(text);
+    setCopiedSavedBanner(true);
+    setTimeout(() => setCopiedSavedBanner(false), 2500);
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.employee_id.trim()) return;
+    setFormError('');
+    if (!form.name.trim() || !form.employee_id.trim()) {
+      setFormError('Employee ID and Full Name are required.');
+      setActiveModalTab('profile');
+      return;
+    }
+
+    const trimmedPass = (form.password || '').trim();
+    if (!editingEmployee && trimmedPass.length < 6) {
+      setFormError('A password of at least 6 characters is required when creating a team member.');
+      setActiveModalTab('profile');
+      return;
+    }
+    if (trimmedPass && trimmedPass.length < 6) {
+      setFormError('Password must be at least 6 characters long.');
+      setActiveModalTab('profile');
+      return;
+    }
+    if (editingEmployee && !trimmedPass && editingEmployee.has_password === false) {
+      setFormError('This employee does not have an active password yet. Please set a password (min 6 characters).');
+      setActiveModalTab('profile');
+      return;
+    }
+
     setIsSaving(true);
-    await onSaveEmployee(form);
-    setIsSaving(false);
-    setShowForm(false);
+    try {
+      await onSaveEmployee({ ...form, password: trimmedPass });
+      if (trimmedPass) {
+        setSavedCredentials({
+          name: form.name,
+          employee_id: form.employee_id,
+          email: form.email,
+          phone: form.phone,
+          password: trimmedPass,
+          department: form.department,
+          assigned_vehicles: form.assigned_vehicles,
+        });
+        setCopiedSavedBanner(false);
+      }
+      setShowForm(false);
+    } catch (err) {
+      setFormError((err as Error).message || 'Failed to save employee.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDeactivate = async (employeeId: string) => {
@@ -746,6 +819,19 @@ Portal URL    : ${window.location.origin}`;
     );
   };
 
+  const handleReactivateEmployee = async (emp: Employee) => {
+    setReactivatingId(emp.employee_id);
+    try {
+      await onSaveEmployee({ ...emp, is_active: true });
+    } catch (err: any) {
+      console.error('Failed to reactivate employee:', err);
+      alert(`Failed to reactivate employee: ${err?.message || 'Database error'}`);
+    } finally {
+      setReactivatingId(null);
+    }
+  };
+
+  // Inactive Employees Section
   return (
     <div className="space-y-6">
       {/* Header Row */}
@@ -770,6 +856,46 @@ Portal URL    : ${window.location.origin}`;
           <span>Add Team Member</span>
         </button>
       </div>
+
+      {/* One-time Post-Save Credentials Banner (shown only right after password create/reset) */}
+      {savedCredentials && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-start space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+              <Key className="w-4 h-4" />
+            </div>
+            <div className="text-xs text-emerald-950 space-y-0.5">
+              <div className="font-bold">
+                Credentials Saved & Encrypted for {formatName(savedCredentials.name)} ({savedCredentials.employee_id})
+              </div>
+              <p className="text-emerald-800">
+                Copy these login details now to share with your team member. Passwords are stored as one-way hashes and cannot be viewed again later.
+              </p>
+              <div className="font-mono text-[11px] bg-white/80 border border-emerald-200 rounded-lg px-2.5 py-1 inline-block mt-1">
+                ID: <strong>{savedCredentials.employee_id}</strong> · Password: <strong>{savedCredentials.password}</strong>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
+            <button
+              type="button"
+              onClick={handleCopySavedCredentials}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center space-x-1.5 shadow-2xs cursor-pointer"
+            >
+              {copiedSavedBanner ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedSavedBanner ? 'Copied Credentials!' : 'Copy Full Credentials'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSavedCredentials(null)}
+              aria-label="Dismiss saved credentials banner"
+              className="p-2 rounded-xl text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Vehicle-Based Auto Lead Assignment Control Center */}
       <div className="p-5 bg-white rounded-2xl shadow-xs border border-slate-200/90 space-y-4">
@@ -1086,7 +1212,7 @@ Portal URL    : ${window.location.origin}`;
               const totalLeads = leadsPerEmployee(emp.employee_id);
               const activeLeads = activeLeadsPerEmployee(emp.employee_id);
               const isCopied = copiedId === emp.employee_id;
-              const isPassRevealed = !!revealedPasswords[emp.employee_id];
+              const hasPassword = emp.has_password !== false;
               const vehicles = emp.assigned_vehicles || [];
               const formattedName = formatName(emp.name);
 
@@ -1234,11 +1360,12 @@ Portal URL    : ${window.location.origin}`;
                                   phone: emp.phone || '',
                                   department: emp.department || 'Sales',
                                   role: emp.role || 'employee',
-                                  password: emp.password || '',
+                                  password: '',
                                   is_active: emp.is_active ?? true,
                                   assigned_vehicles: emp.assigned_vehicles || [],
                                   assigned_subtypes: emp.assigned_subtypes || [],
                                 });
+                                setFormError('');
                                 setActiveModalTab('vehicles');
                                 setShowForm(true);
                               }}
@@ -1251,28 +1378,22 @@ Portal URL    : ${window.location.origin}`;
                       </div>
                     </div>
 
-                    {/* Password & Credentials Box */}
+                    {/* Security Status & Access Copy Box */}
                     <div className="mt-3 p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
-                      <div className="flex items-center space-x-1.5 text-slate-600 font-mono">
-                        <Key className="w-3.5 h-3.5 text-slate-400" />
-                        <span className="text-slate-500 font-sans text-[11px]">Pass:</span>
-                        <span className="font-bold text-slate-800">
-                          {emp.password
-                            ? isPassRevealed
-                              ? emp.password
-                              : '••••••••'
-                            : '(not set)'}
-                        </span>
-                        {emp.password && (
-                          <button
-                            type="button"
-                            onClick={() => togglePasswordReveal(emp.employee_id)}
-                            className="text-slate-400 hover:text-slate-600 ml-1 p-0.5 cursor-pointer"
-                            title={isPassRevealed ? 'Hide password' : 'Show password'}
-                          >
-                            {isPassRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
+                      <div className="flex items-center space-x-1.5 text-slate-600">
+                        {hasPassword ? (
+                          <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                         )}
+                        <span className="text-slate-500 text-[11px]">Auth:</span>
+                        <span
+                          className={`font-bold text-[11px] ${
+                            hasPassword ? 'text-emerald-700' : 'text-amber-700'
+                          }`}
+                        >
+                          {hasPassword ? 'Encrypted Password Active' : 'Not set — Edit to Assign'}
+                        </span>
                       </div>
                       <button
                         type="button"
@@ -1282,7 +1403,7 @@ Portal URL    : ${window.location.origin}`;
                             ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                             : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
                         }`}
-                        title="Copy login details to send to specialist"
+                        title="Copy Employee ID & Portal URL (password stays hashed)"
                       >
                         {isCopied ? (
                           <>
@@ -1292,7 +1413,7 @@ Portal URL    : ${window.location.origin}`;
                         ) : (
                           <>
                             <Copy className="w-3.5 h-3.5 text-slate-500" />
-                            <span>Share Login</span>
+                            <span>Copy Access ID</span>
                           </>
                         )}
                       </button>
@@ -1332,11 +1453,19 @@ Portal URL    : ${window.location.origin}`;
                 <span>{emp.name}</span>
                 <span className="font-mono text-slate-400">({emp.employee_id})</span>
                 <button
-                  onClick={() => onSaveEmployee({ ...emp, is_active: true })}
-                  className="text-emerald-600 hover:text-emerald-700 font-semibold ml-1 cursor-pointer"
+                  disabled={reactivatingId === emp.employee_id}
+                  onClick={() => handleReactivateEmployee(emp)}
+                  className="text-emerald-600 hover:text-emerald-700 disabled:opacity-50 font-semibold ml-1 cursor-pointer flex items-center space-x-1"
                   title="Reactivate"
                 >
-                  Reactivate
+                  {reactivatingId === emp.employee_id ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin inline" />
+                      <span>Reactivating...</span>
+                    </>
+                  ) : (
+                    <span>Reactivate</span>
+                  )}
                 </button>
               </div>
             ))}
@@ -1537,7 +1666,11 @@ Portal URL    : ${window.location.origin}`;
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center space-x-1">
                           <Key className="w-3 h-3 text-blue-600" />
-                          <span>Login Password / Access Key</span>
+                          <span>
+                            {editingEmployee
+                              ? 'Reset Password (Optional)'
+                              : 'Login Password * (Min 6 chars)'}
+                          </span>
                         </label>
                         <button
                           type="button"
@@ -1552,8 +1685,15 @@ Portal URL    : ${window.location.origin}`;
                         <input
                           type={showPassword ? 'text' : 'password'}
                           value={form.password || ''}
-                          onChange={(e) => setForm({ ...form, password: e.target.value })}
-                          placeholder="Enter password or click Auto-Generate"
+                          onChange={(e) => {
+                            setForm({ ...form, password: e.target.value });
+                            if (formError) setFormError('');
+                          }}
+                          placeholder={
+                            editingEmployee
+                              ? 'Leave blank to keep existing encrypted password'
+                              : 'Enter password (min 6 chars) or click Auto-Generate'
+                          }
                           className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-lg text-xs font-mono text-slate-900 bg-white placeholder:text-slate-400 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                         />
                         <button
@@ -1566,7 +1706,9 @@ Portal URL    : ${window.location.origin}`;
                         </button>
                       </div>
                       <p className="text-[11px] text-slate-500">
-                        This password enables employee login to manage their assigned WhatsApp freight leads.
+                        {editingEmployee
+                          ? 'Passwords are stored encrypted on the server. Leave blank to keep current password, or enter a new one to reset it.'
+                          : 'Passwords are encrypted before storage. After saving, a one-time Copy button will appear so you can share the password with the specialist.'}
                       </p>
                     </div>
 
@@ -1666,6 +1808,16 @@ Portal URL    : ${window.location.origin}`;
                   </div>
                 )}
               </div>
+
+              {formError && (
+                <div
+                  role="alert"
+                  className="mx-5 mb-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center space-x-2 shrink-0"
+                >
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
 
               {/* Sticky Modal Footer */}
               <div className="p-4 bg-slate-50 border-t border-slate-200 shrink-0 flex items-center justify-between">

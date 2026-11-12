@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { FreightBooking, Employee, LeadAssignment } from '../../types';
 import { UserRole } from '../../context/RoleContext';
+import { categorizeVehicle } from '../../services/supabase';
 
 interface BookingsTableProps {
   bookings: FreightBooking[];
@@ -118,6 +119,11 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
   const filtered = bookings.filter((b) => {
     const query = searchQuery.toLowerCase().trim();
     const shortId = extractShortId(b.user_id).toLowerCase();
+    const assignment = assignments[b.user_id];
+    const assignedEmp = assignment?.assigned_to
+      ? employees.find((e) => e.employee_id === assignment.assigned_to)
+      : null;
+
     const matchesSearch =
       !query ||
       shortId.includes(query) ||
@@ -134,7 +140,11 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
       (b.originCity || '').toLowerCase().includes(query) ||
       (b.destinationCity || '').toLowerCase().includes(query) ||
       (b.material_or_line || '').toLowerCase().includes(query) ||
-      (b.vehicle_or_container || '').toLowerCase().includes(query);
+      (b.vehicle_or_container || '').toLowerCase().includes(query) ||
+      (b.vehicle_sub_type || '').toLowerCase().includes(query) ||
+      (b.remarks || '').toLowerCase().includes(query) ||
+      (assignedEmp?.name || '').toLowerCase().includes(query) ||
+      (assignedEmp?.employee_id || '').toLowerCase().includes(query);
 
     const matchesStatus = statusFilter === 'all' || b.status === statusFilter;
     const matchesCargo = cargoFilter === 'all' || b.cargo_type.toLowerCase() === cargoFilter.toLowerCase();
@@ -152,7 +162,6 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
     }
 
     // Admin employee filter dropdown
-    const assignment = assignments[b.user_id];
     const matchesEmployee =
       employeeFilter === 'all' ||
       (employeeFilter === 'unassigned' && !assignment?.assigned_to) ||
@@ -167,12 +176,14 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
       const t = new Date(bkg.updated_at).getTime();
       if (!isNaN(t) && t > 0) return t;
     }
+    // Only parse if user_id contains an underscore followed strictly by a valid epoch timestamp (2020-2035)
     if (bkg.user_id && bkg.user_id.includes('_')) {
-      const ts = parseInt(bkg.user_id.split('_')[1], 10);
-      if (!isNaN(ts) && ts > 1000000000) return ts;
+      const parts = bkg.user_id.split('_');
+      const tsPart = parts[parts.length - 1];
+      const ts = parseInt(tsPart, 10);
+      if (!isNaN(ts) && ts >= 1577836800000 && ts <= 2051222400000) return ts;
+      if (!isNaN(ts) && ts >= 1577836800 && ts <= 2051222400) return ts * 1000;
     }
-    const cleanNum = parseInt(bkg.user_id.replace(/\D/g, ''), 10);
-    if (!isNaN(cleanNum) && cleanNum > 1000000000) return cleanNum;
     return 0;
   };
 
@@ -184,12 +195,11 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
       if (!isNaN(d.getTime()) && d.getTime() > 0) dateObj = d;
     }
     if (!dateObj && userId && userId.includes('_')) {
-      const ts = parseInt(userId.split('_')[1], 10);
-      if (!isNaN(ts) && ts > 1000000000) dateObj = new Date(ts);
-    }
-    if (!dateObj && userId) {
-      const cleanNum = parseInt(userId.replace(/\D/g, ''), 10);
-      if (!isNaN(cleanNum) && cleanNum > 1000000000) dateObj = new Date(cleanNum);
+      const parts = userId.split('_');
+      const tsPart = parts[parts.length - 1];
+      const ts = parseInt(tsPart, 10);
+      if (!isNaN(ts) && ts >= 1577836800000 && ts <= 2051222400000) dateObj = new Date(ts);
+      else if (!isNaN(ts) && ts >= 1577836800 && ts <= 2051222400) dateObj = new Date(ts * 1000);
     }
 
     if (!dateObj) {
@@ -263,8 +273,13 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
   const handleAssignLead = async (userId: string, employeeId: string) => {
     if (!onAssignLead) return;
     setAssigningId(userId);
-    await onAssignLead(userId, employeeId);
-    setAssigningId(null);
+    try {
+      await onAssignLead(userId, employeeId);
+    } catch (err) {
+      console.error('Assign lead error:', err);
+    } finally {
+      setAssigningId(null);
+    }
   };
 
   const openTransferModal = (b: FreightBooking) => {
@@ -276,9 +291,14 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
   const handleTransfer = async () => {
     if (!transferBooking || !transferTo || !onTransferLead) return;
     setIsTransferring(true);
-    await onTransferLead(transferBooking.user_id, transferTo, transferNote);
-    setIsTransferring(false);
-    setTransferBooking(null);
+    try {
+      await onTransferLead(transferBooking.user_id, transferTo, transferNote);
+      setTransferBooking(null);
+    } catch (err) {
+      console.error('Transfer lead error:', err);
+    } finally {
+      setIsTransferring(false);
+    }
   };
 
   // Pre-filtered base set for tab counts — respects employee scope & employee filter dropdown
@@ -767,6 +787,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                           {(() => {
                             const assignedEmp = getAssignedEmployee(b.user_id);
                             const a = assignments[b.user_id];
+                            const vehicleCat = categorizeVehicle(b.vehicle_or_container, b.cargo_type);
                             return (
                               <div className="space-y-1">
                                 <select
@@ -780,9 +801,14 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                                   } disabled:opacity-60`}
                                 >
                                   <option value="">Unassigned</option>
-                                  {employees.filter(e => e.is_active).map((e) => (
-                                    <option key={e.employee_id} value={e.employee_id}>{e.name}</option>
-                                  ))}
+                                  {employees.filter(e => e.is_active).map((e) => {
+                                    const isSpecialist = Array.isArray(e.assigned_vehicles) && e.assigned_vehicles.includes(vehicleCat as any);
+                                    return (
+                                      <option key={e.employee_id} value={e.employee_id}>
+                                        {e.name} {isSpecialist ? `★ (${vehicleCat})` : ''}
+                                      </option>
+                                    );
+                                  })}
                                 </select>
                                 {assignedEmp && (
                                   <button
@@ -1159,11 +1185,19 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:border-blue-500"
                 >
                   <option value="">Select employee...</option>
-                  {employees
-                    .filter((e) => e.is_active && e.employee_id !== getAssignedEmployee(transferBooking.user_id)?.employee_id)
-                    .map((e) => (
-                      <option key={e.employee_id} value={e.employee_id}>{e.name} ({e.employee_id})</option>
-                    ))}
+                  {(() => {
+                    const tCat = categorizeVehicle(transferBooking.vehicle_or_container, transferBooking.cargo_type);
+                    return employees
+                      .filter((e) => e.is_active && e.employee_id !== getAssignedEmployee(transferBooking.user_id)?.employee_id)
+                      .map((e) => {
+                        const isSpec = Array.isArray(e.assigned_vehicles) && e.assigned_vehicles.includes(tCat as any);
+                        return (
+                          <option key={e.employee_id} value={e.employee_id}>
+                            {e.name} ({e.employee_id}) {isSpec ? `★ (${tCat} Specialist)` : ''}
+                          </option>
+                        );
+                      });
+                  })()}
                 </select>
               </div>
 

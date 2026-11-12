@@ -1,525 +1,775 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ShieldCheck,
-  UserCheck,
+  User,
   Lock,
-  Mail,
   Eye,
   EyeOff,
-  Truck,
   ArrowRight,
-  Sparkles,
-  AlertCircle,
-  CheckCircle2,
-  Phone,
-  Hash,
-  Key,
-  Layers,
-  Zap,
+  Truck,
   Radio,
+  CheckCircle2,
+  AlertCircle,
+  KeyRound,
+  Mail,
+  MessageSquare,
+  ArrowLeft,
+  Loader2,
+  Zap,
   Clock,
-  Shield,
-  HelpCircle,
 } from 'lucide-react';
-import { Employee } from '../../types';
+import { authService } from '../../services/auth';
 
 interface LoginPageProps {
-  employees: Employee[];
-  onLoginAdmin: (usernameOrEmail: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  onLoginEmployee: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  onLoginAdmin: (
+    identifier: string,
+    password: string,
+    rememberMe: boolean
+  ) => Promise<{ success: boolean; error?: string }>;
+  onLoginEmployee: (
+    empIdOrEmail: string,
+    password: string,
+    rememberMe: boolean
+  ) => Promise<{ success: boolean; error?: string }>;
 }
 
+const FEATURE_PILLARS = [
+  {
+    icon: Zap,
+    iconBoxClass: 'bg-amber-50 text-amber-600 border-amber-200',
+    title: 'Instant WhatsApp Demand Capture',
+    desc: 'Inbound chat requests automatically formatted with PIN-to-PIN distance & material specs.',
+  },
+  {
+    icon: Truck,
+    iconBoxClass: 'bg-blue-50 text-blue-600 border-blue-200',
+    title: 'Strict Fleet Lead Matching',
+    desc: 'Truck, Tempo, Container & Port FCL leads routed only to designated vehicle specialists.',
+  },
+  {
+    icon: Clock,
+    iconBoxClass: 'bg-emerald-50 text-emerald-600 border-emerald-200',
+    title: '3-Stage 24h Drop-Off Recovery',
+    desc: 'Scheduled follow-up nudges (~1-2h, ~6-8h, ~18-22h) recover dropped orders.',
+  },
+  {
+    icon: ShieldCheck,
+    iconBoxClass: 'bg-violet-50 text-violet-600 border-violet-200',
+    title: 'Role-Based Access Control',
+    desc: 'Separated workspaces for Specialist Dispatch and Management Oversight.',
+  },
+];
+
 export const LoginPage: React.FC<LoginPageProps> = ({
-  employees,
   onLoginAdmin,
   onLoginEmployee,
 }) => {
-  const [activeTab, setActiveTab] = useState<'admin' | 'employee'>('admin');
-  
-  // Admin form state
-  const [adminIdentifier, setAdminIdentifier] = useState('admin@traket.in');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [showAdminPassword, setShowAdminPassword] = useState(false);
-  
-  // Employee form state
-  const [empIdentifier, setEmpIdentifier] = useState('');
-  const [empPassword, setEmpPassword] = useState('');
-  const [showEmpPassword, setShowEmpPassword] = useState(false);
+  const [roleTab, setRoleTab] = useState<'admin' | 'employee'>('admin');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [error, setError] = useState('');
+  const [successBanner, setSuccessBanner] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Common state
-  const [rememberMe, setRememberMe] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Forgot password (WhatsApp OTP) state
+  const [forgotMode, setForgotMode] = useState(false);
+  const [resetStep, setResetStep] = useState<'request' | 'confirm'>('request');
+  const [resetIdentifier, setResetIdentifier] = useState('');
+  const [resetOtp, setResetOtp] = useState('');
+  const [resetNewPass, setResetNewPass] = useState('');
+  const [resetConfirmPass, setResetConfirmPass] = useState('');
+  const [showResetPass, setShowResetPass] = useState(false);
+  const [resetInfo, setResetInfo] = useState('');
 
-  // Set default employee if available
+  // Live backend health status
+  const [healthStatus, setHealthStatus] = useState<{
+    checked: boolean;
+    online: boolean;
+    configured: boolean;
+    latencyMs: number | null;
+  }>({ checked: false, online: false, configured: false, latencyMs: null });
+
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+
+  const isHttps =
+    typeof window !== 'undefined' && window.location.protocol === 'https:';
+
   useEffect(() => {
-    const activeEmps = employees.filter((e) => e.is_active);
-    if (activeEmps.length > 0 && !empIdentifier) {
-      setEmpIdentifier(activeEmps[0].employee_id);
-      if (activeEmps[0].password) {
-        setEmpPassword(activeEmps[0].password);
-      }
-    }
-  }, [employees, empIdentifier]);
+    let mounted = true;
+    authService.checkHealth().then((res) => {
+      if (!mounted) return;
+      setHealthStatus({
+        checked: true,
+        online: res.online,
+        configured: res.configured,
+        latencyMs: res.latencyMs,
+      });
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-  // Clear errors when switching tabs
-  const handleTabSwitch = (tab: 'admin' | 'employee') => {
-    setActiveTab(tab);
-    setErrorMessage(null);
+  const handleTabSwitch = (nextTab: 'admin' | 'employee') => {
+    setRoleTab(nextTab);
+    setError('');
+    setSuccessBanner('');
+    setIdentifier('');
+    setPassword('');
+    setForgotMode(false);
+    setResetStep('request');
+    setResetOtp('');
+    setResetNewPass('');
+    setResetConfirmPass('');
+    setResetInfo('');
   };
 
-  // Quick fill demo admin
-  const fillDemoAdmin = () => {
-    setAdminIdentifier('admin@traket.in');
-    setAdminPassword('admin123');
-    setErrorMessage(null);
-  };
-
-  // Quick select employee
-  const selectEmployeeQuick = (emp: Employee) => {
-    setEmpIdentifier(emp.employee_id);
-    setEmpPassword(emp.password || '');
-    setErrorMessage(null);
-  };
-
-  // Handle Admin submit
-  const handleAdminSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminIdentifier.trim()) {
-      setErrorMessage('Please enter your Admin Email or Username.');
-      return;
-    }
-    if (!adminPassword.trim()) {
-      setErrorMessage('Please enter your Admin password.');
+    setError('');
+    setSuccessBanner('');
+
+    const cleanId = identifier.trim();
+    if (!cleanId) {
+      setError(
+        roleTab === 'admin'
+          ? 'Please enter your Admin Email or Username.'
+          : 'Please enter your Employee ID or Email.'
+      );
       return;
     }
 
-    setIsLoading(true);
-    setErrorMessage(null);
+    if (!password) {
+      setError('Please enter your password.');
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      const res = await onLoginAdmin(adminIdentifier.trim(), adminPassword.trim());
+      const res =
+        roleTab === 'admin'
+          ? await onLoginAdmin(cleanId, password, rememberMe)
+          : await onLoginEmployee(cleanId, password, rememberMe);
+
       if (!res.success) {
-        setErrorMessage(res.error || 'Authentication failed. Please verify credentials.');
+        setError(res.error || 'Authentication failed. Check your credentials and try again.');
       }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Network error during login.');
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  // Handle Employee submit
-  const handleEmployeeSubmit = async (e: React.FormEvent) => {
+  const openForgotFlow = () => {
+    setForgotMode(true);
+    setResetStep('request');
+    setResetIdentifier(identifier.trim());
+    setResetOtp('');
+    setResetNewPass('');
+    setResetConfirmPass('');
+    setResetInfo('');
+    setError('');
+    setSuccessBanner('');
+  };
+
+  const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!empIdentifier.trim()) {
-      setErrorMessage('Please enter your Employee ID (e.g. EMP001) or work email.');
-      return;
-    }
-    if (!empPassword.trim()) {
-      setErrorMessage('Please enter your employee password / access key.');
+    setError('');
+    setResetInfo('');
+
+    if (!resetIdentifier.trim()) {
+      setError(
+        roleTab === 'admin'
+          ? 'Please enter your Admin Email or Username.'
+          : 'Please enter your Employee ID or Email.'
+      );
       return;
     }
 
-    setIsLoading(true);
-    setErrorMessage(null);
+    setIsSubmitting(true);
     try {
-      const res = await onLoginEmployee(empIdentifier.trim(), empPassword.trim());
+      const res = await authService.requestPasswordReset(roleTab, resetIdentifier);
       if (!res.success) {
-        setErrorMessage(res.error || 'Authentication failed. Please check Employee ID and password.');
+        setError(res.error || 'Could not initiate password reset.');
+        return;
       }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Network error during login.');
+      setResetInfo(
+        res.message ||
+          'If an active account with a registered WhatsApp number matches, a 6-digit code has been sent.'
+      );
+      setResetStep('confirm');
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  const activeEmployees = employees.filter((e) => e.is_active);
+  const handleConfirmReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!/^\d{6}$/.test(resetOtp.trim())) {
+      setError('Please enter the 6-digit numeric code sent to your WhatsApp.');
+      return;
+    }
+    if (resetNewPass.length < 6) {
+      setError('New password must be at least 6 characters long.');
+      return;
+    }
+    if (resetNewPass !== resetConfirmPass) {
+      setError('New password and confirmation do not match.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await authService.confirmPasswordReset(
+        roleTab,
+        resetIdentifier,
+        resetOtp,
+        resetNewPass
+      );
+      if (!res.success) {
+        setError(res.error || 'Failed to verify reset code.');
+        return;
+      }
+
+      setForgotMode(false);
+      setIdentifier(resetIdentifier.trim());
+      setPassword('');
+      setSuccessBanner(res.message || 'Password updated! Sign in with your new password.');
+      setTimeout(() => passwordInputRef.current?.focus(), 50);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-4 sm:p-6 lg:p-8 overflow-hidden font-sans bg-slate-950 text-slate-100">
-      {/* ======================================================== */}
-      {/* 1. PROFESSIONAL HIGHWAY TRUCK & FREIGHT BACKDROP */}
-      {/* ======================================================== */}
-      <div
-        className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat scale-105 transform filter blur-[1px] brightness-50"
-        style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=2000&q=80')`,
-        }}
-      />
-
-      {/* Cinematic Dark Gradient & Mesh Overlays */}
-      <div className="absolute inset-0 z-0 bg-gradient-to-tr from-slate-950 via-slate-950/85 to-blue-950/75 backdrop-blur-xs" />
-      <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-blue-600/20 via-transparent to-transparent pointer-events-none" />
-
-      {/* Top Floating Brand Status Bar */}
-      <div className="absolute top-4 sm:top-6 left-4 sm:left-8 right-4 sm:right-8 z-10 flex items-center justify-between pointer-events-none">
-        <div className="flex items-center space-x-2.5 bg-slate-900/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-slate-700/60 shadow-lg pointer-events-auto">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
-          <span className="text-[11px] font-bold text-slate-200 tracking-wide uppercase">
-            Traket Dispatch Cloud Online
-          </span>
-          <span className="text-slate-500">|</span>
-          <span className="text-[11px] text-emerald-400 font-mono font-bold">24ms Latency</span>
-        </div>
-
-        <div className="hidden md:flex items-center space-x-2 bg-slate-900/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-slate-700/60 text-[11px] text-slate-300 font-medium pointer-events-auto">
-          <Shield className="w-3.5 h-3.5 text-blue-400" />
-          <span>Enterprise 256-Bit SSL • WhatsApp Meta Verified</span>
-        </div>
-      </div>
-
-      {/* ======================================================== */}
-      {/* 2. MAIN LOGIN CONTAINER (DUAL PANE ON LARGE SCREENS) */}
-      {/* ======================================================== */}
-      <div className="relative z-10 w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-center my-auto pt-10 sm:pt-6">
-        
-        {/* Left Pane: Logistics Brand Presentation (Hidden on small screens) */}
-        <div className="hidden lg:flex lg:col-span-6 flex-col justify-between space-y-6 text-white pr-4">
+    <div className="min-h-screen w-full flex flex-col justify-between overflow-y-auto bg-slate-50 text-slate-900 font-sans">
+      {/* Top Bar matching CRM Dashboard Header */}
+      <header className="w-full bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between shrink-0">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm shrink-0">
+            <Radio className="w-4 h-4 text-white" />
+          </div>
           <div>
-            {/* Brand Logo & Name */}
-            <div className="flex items-center space-x-3 mb-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/25 border border-white/20">
-                <Truck className="w-6 h-6" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-black tracking-tight text-white flex items-center space-x-2">
-                  <span>TRAKET</span>
-                  <span className="text-xs px-2 py-0.5 rounded-md bg-blue-500/30 text-blue-300 font-bold border border-blue-400/30 uppercase tracking-wider">
-                    Logistics Hub
-                  </span>
-                </h1>
-                <p className="text-xs text-slate-300 font-medium">Pan-India WhatsApp Freight Dispatch Engine</p>
-              </div>
+            <div className="font-extrabold text-sm tracking-tight text-slate-900 leading-tight">
+              TRAKET
             </div>
+            <div className="text-[10px] text-slate-500 font-medium leading-tight">
+              Logistics Dispatch Hub
+            </div>
+          </div>
+        </div>
 
-            <h2 className="text-3xl font-black tracking-tight leading-snug text-white mt-4">
-              Intelligent Freight Routing & Realtime Dispatch Operations
-            </h2>
-            <p className="text-sm text-slate-300 mt-3 leading-relaxed">
-              Automates WhatsApp customer cargo demand capture, matches loads to vehicle specialists in real-time, and recovers dropped inquiries with 3-stage nudges.
-            </p>
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-50 border border-slate-200 text-xs font-medium text-slate-600">
+            <KeyRound className={`w-3.5 h-3.5 ${isHttps ? 'text-emerald-600' : 'text-blue-600'}`} />
+            <span>{isHttps ? 'Encrypted HTTPS' : 'JWT Signed Session'}</span>
           </div>
 
-          {/* 4 Feature Value Pillars */}
-          <div className="space-y-3">
-            {[
-              {
-                icon: Zap,
-                color: 'text-amber-400',
-                title: 'Instant WhatsApp Demand Capture',
-                desc: 'Inbound chat requests automatically formatted with PIN-to-PIN distance & material specs.',
-              },
-              {
-                icon: Truck,
-                color: 'text-blue-400',
-                title: 'Strict Fleet Lead Matching',
-                desc: 'Truck, Tempo, Container & Port FCL leads routed only to designated vehicle specialists.',
-              },
-              {
-                icon: Clock,
-                color: 'text-emerald-400',
-                title: '3-Stage 24h Drop-Off Recovery',
-                desc: 'Scheduled nudges (~1-2h, ~6-8h, ~18-22h) recover dropped orders at ₹0 Meta fees.',
-              },
-              {
-                icon: ShieldCheck,
-                color: 'text-purple-400',
-                title: 'Role-Based Access Control',
-                desc: 'Separated workspaces for Specialist Dispatch and Management Oversight.',
-              },
-            ].map((feature, idx) => (
+          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                !healthStatus.checked
+                  ? 'bg-slate-400 animate-pulse'
+                  : healthStatus.online && healthStatus.configured
+                  ? 'bg-emerald-500'
+                  : 'bg-amber-500'
+              }`}
+            />
+            <span>
+              {!healthStatus.checked
+                ? 'Checking Local Auth...'
+                : !healthStatus.online
+                ? 'Local Server Offline (:3005)'
+                : !healthStatus.configured
+                ? 'Add Service Role Key in .env'
+                : `Local Auth Online${healthStatus.latencyMs !== null ? ` (${healthStatus.latencyMs}ms)` : ''}`}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Two-Column CRM Content Container */}
+      <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10 flex items-center">
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+          {/* Left Pane: Logistics Brand & Operations Overview (Dashboard Theme) */}
+          <section className="hidden lg:flex lg:col-span-6 flex-col justify-between space-y-6 pr-2">
+            <div>
+              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold mb-4">
+                <Truck className="w-3.5 h-3.5 text-blue-600" />
+                <span>Pan-India WhatsApp Freight Dispatch Engine</span>
+              </div>
+
+              <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight leading-snug">
+                Intelligent Freight Routing &amp; Realtime Dispatch Operations
+              </h1>
+              <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+                Automates WhatsApp customer cargo demand capture, matches loads to vehicle specialists in real-time, and recovers dropped inquiries with 3-stage nudges.
+              </p>
+            </div>
+
+            {/* 4 Clean Dashboard-Style Feature Cards */}
+            <div className="space-y-3">
+              {FEATURE_PILLARS.map((feature) => (
+                <div
+                  key={feature.title}
+                  className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xs flex items-start space-x-3.5 hover:border-slate-300 transition"
+                >
+                  <div
+                    className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${feature.iconBoxClass}`}
+                  >
+                    <feature.icon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">{feature.title}</div>
+                    <div className="text-xs text-slate-500 leading-relaxed mt-0.5">
+                      {feature.desc}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Fleet Categories Strip */}
+            <div className="pt-3 border-t border-slate-200 flex items-center flex-wrap gap-x-4 gap-y-1.5 text-xs font-semibold text-slate-500">
+              <span>Tempo (1-10 MT)</span>
+              <span className="text-slate-300">•</span>
+              <span>Trucks (12-40 MT)</span>
+              <span className="text-slate-300">•</span>
+              <span>32ft Containers</span>
+              <span className="text-slate-300">•</span>
+              <span>Port FCL 20/40</span>
+            </div>
+          </section>
+
+          {/* Right Pane: Clean White Dashboard Sign-In Card */}
+          <section className="lg:col-span-6 w-full max-w-[440px] mx-auto">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-7 shadow-sm">
+              {/* Card Header */}
+              <div className="mb-5">
+                <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                  {forgotMode ? 'Reset Account Password' : 'Sign in to Traket CRM'}
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  {forgotMode
+                    ? 'Verify your identity via a 6-digit WhatsApp security code'
+                    : 'Access your dispatch desk, live inquiries, and booking tools'}
+                </p>
+              </div>
+
+              {/* Role Portal Switcher (Admin Blue / Employee Violet matching Sidebar & Header) */}
               <div
-                key={idx}
-                className="p-3 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm flex items-start space-x-3 transition hover:bg-white/10"
+                role="tablist"
+                aria-label="Account portal type"
+                className="grid grid-cols-2 p-1 bg-slate-100 border border-slate-200 rounded-xl mb-5"
               >
-                <div className="p-2 rounded-xl bg-white/10 shrink-0 mt-0.5">
-                  <feature.icon className={`w-4 h-4 ${feature.color}`} />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-white">{feature.title}</div>
-                  <div className="text-[11px] text-slate-300 leading-snug mt-0.5">{feature.desc}</div>
-                </div>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={roleTab === 'admin'}
+                  onClick={() => handleTabSwitch('admin')}
+                  className={`flex items-center justify-center space-x-2 py-2.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    roleTab === 'admin'
+                      ? 'bg-white text-blue-700 shadow-2xs border border-slate-200'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Admin HQ</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={roleTab === 'employee'}
+                  onClick={() => handleTabSwitch('employee')}
+                  className={`flex items-center justify-center space-x-2 py-2.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    roleTab === 'employee'
+                      ? 'bg-white text-violet-700 shadow-2xs border border-slate-200'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>Employee Portal</span>
+                </button>
               </div>
-            ))}
-          </div>
 
-          {/* Footer stats pill */}
-          <div className="pt-2 flex items-center space-x-4 text-[11px] text-slate-400 border-t border-white/10">
-            <span>🚚 Tempo (1-10 MT)</span>
-            <span>•</span>
-            <span>🚛 Trucks (12-40 MT)</span>
-            <span>•</span>
-            <span>📦 32ft Containers</span>
-            <span>•</span>
-            <span>⚓ Port FCL 20/40</span>
-          </div>
-        </div>
-
-        {/* Right Pane: High-End Login Card */}
-        <div className="lg:col-span-6 w-full max-w-md mx-auto">
-          <div className="bg-white/95 backdrop-blur-xl border border-white/40 shadow-2xl rounded-3xl p-6 sm:p-8 text-slate-900 transition-all duration-200">
-            
-            {/* Card Header */}
-            <div className="text-center space-y-1 mb-5">
-              <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center mx-auto shadow-md shadow-blue-500/30 mb-2">
-                <Lock className="w-6 h-6" />
-              </div>
-              <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">
-                Sign in to Traket CRM
-              </h2>
-              <p className="text-xs text-slate-500">
-                Logistics Dispatch Hub & Lead Operations Console
-              </p>
-            </div>
-
-            {/* Segmented Role Switcher: Admin vs Employee */}
-            <div className="flex p-1 bg-slate-100 rounded-xl mb-5 text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => handleTabSwitch('admin')}
-                className={`flex-1 py-2 rounded-lg transition-all duration-150 flex items-center justify-center space-x-2 cursor-pointer ${
-                  activeTab === 'admin'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <ShieldCheck className="w-4 h-4" />
-                <span>Admin Access</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleTabSwitch('employee')}
-                className={`flex-1 py-2 rounded-lg transition-all duration-150 flex items-center justify-center space-x-2 cursor-pointer ${
-                  activeTab === 'employee'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <UserCheck className="w-4 h-4" />
-                <span>Employee Portal</span>
-              </button>
-            </div>
-
-            {/* Error Banner */}
-            {errorMessage && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start space-x-2 animate-in fade-in duration-150">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                <div className="flex-1 leading-snug">{errorMessage}</div>
-              </div>
-            )}
-
-            {/* ======================================================== */}
-            {/* TAB 1: ADMIN LOGIN FORM */}
-            {/* ======================================================== */}
-            {activeTab === 'admin' ? (
-              <form onSubmit={handleAdminSubmit} className="space-y-4">
-                {/* Admin Identifier */}
-                <div>
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block mb-1">
-                    Admin Email or Username
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={adminIdentifier}
-                      onChange={(e) => setAdminIdentifier(e.target.value)}
-                      placeholder="admin@traket.in"
-                      autoComplete="username"
-                      className="w-full pl-10 pr-3.5 py-2.5 border border-slate-300 rounded-xl text-xs text-slate-900 bg-white placeholder:text-slate-400 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-                    />
-                  </div>
-                </div>
-
-                {/* Admin Password */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700">
-                      Security Password
+              {!forgotMode ? (
+                <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+                  {/* Identifier Input */}
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="traket-login-identifier"
+                      className="text-xs font-bold text-slate-700 flex items-center space-x-1.5"
+                    >
+                      {roleTab === 'admin' ? (
+                        <Mail className="w-3.5 h-3.5 text-blue-600" />
+                      ) : (
+                        <User className="w-3.5 h-3.5 text-violet-600" />
+                      )}
+                      <span>
+                        {roleTab === 'admin' ? 'Admin Email or Username' : 'Employee ID or Email'}
+                      </span>
                     </label>
-                    <button
-                      type="button"
-                      onClick={fillDemoAdmin}
-                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center space-x-0.5 cursor-pointer"
-                      title="Auto-fill admin demo credentials"
-                    >
-                      <Sparkles className="w-3 h-3 text-amber-500" />
-                      <span>Fill Demo Admin</span>
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
-                      type={showAdminPassword ? 'text' : 'password'}
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                      placeholder="Enter admin password (e.g. admin123)"
-                      autoComplete="current-password"
-                      className="w-full pl-10 pr-10 py-2.5 border border-slate-300 rounded-xl text-xs text-slate-900 bg-white placeholder:text-slate-400 font-mono font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowAdminPassword(!showAdminPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-                    >
-                      {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Remember Me */}
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <label className="flex items-center space-x-2 text-slate-600 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
-                    />
-                    <span className="font-medium">Stay signed in on this device</span>
-                  </label>
-                </div>
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
-                >
-                  {isLoading ? (
-                    <span>Verifying Admin Credentials...</span>
-                  ) : (
-                    <>
-                      <span>Sign In as Administrator</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </form>
-            ) : (
-              /* ======================================================== */
-              /* TAB 2: EMPLOYEE PORTAL LOGIN */
-              /* ======================================================== */
-              <form onSubmit={handleEmployeeSubmit} className="space-y-4">
-                {/* Employee Quick Select Pills */}
-                {activeEmployees.length > 0 && (
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
-                    <div className="text-[10px] font-bold uppercase text-slate-500 flex items-center space-x-1">
-                      <Sparkles className="w-3 h-3 text-amber-500" />
-                      <span>Quick Select Specialist:</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {activeEmployees.map((emp) => (
-                        <button
-                          key={emp.employee_id}
-                          type="button"
-                          onClick={() => selectEmployeeQuick(emp)}
-                          className={`px-2.5 py-1 rounded-lg border text-xs font-bold transition flex items-center space-x-1 cursor-pointer ${
-                            empIdentifier === emp.employee_id || empIdentifier === emp.email
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          <span>{emp.name}</span>
-                          <span className="font-mono text-[10px] opacity-75">({emp.employee_id})</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Employee ID or Email */}
-                <div>
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block mb-1">
-                    Employee ID or Work Email
-                  </label>
-                  <div className="relative">
-                    <Hash className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
+                      id="traket-login-identifier"
                       type="text"
-                      value={empIdentifier}
-                      onChange={(e) => setEmpIdentifier(e.target.value)}
-                      placeholder="e.g. EMP001 or preet@gmail.com"
                       autoComplete="username"
-                      className="w-full pl-10 pr-3.5 py-2.5 border border-slate-300 rounded-xl text-xs text-slate-900 bg-white placeholder:text-slate-400 font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+                      value={identifier}
+                      onChange={(e) => {
+                        setIdentifier(e.target.value);
+                        if (error) setError('');
+                      }}
+                      placeholder={
+                        roleTab === 'admin' ? 'admin@traket.in' : 'EMP001 or name@traket.in'
+                      }
+                      className={`w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none transition ${
+                        roleTab === 'admin'
+                          ? 'focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15'
+                          : 'focus:border-violet-600 focus:ring-2 focus:ring-violet-600/15'
+                      }`}
+                      required
                     />
                   </div>
-                </div>
 
-                {/* Employee Access Key / Password */}
-                <div>
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-700 block mb-1">
-                    Access Key / Password
-                  </label>
-                  <div className="relative">
-                    <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type={showEmpPassword ? 'text' : 'password'}
-                      value={empPassword}
-                      onChange={(e) => setEmpPassword(e.target.value)}
-                      placeholder="Enter your employee access key"
-                      autoComplete="current-password"
-                      className="w-full pl-10 pr-10 py-2.5 border border-slate-300 rounded-xl text-xs text-slate-900 bg-white placeholder:text-slate-400 font-mono font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
-                    />
+                  {/* Password Input */}
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="traket-login-password"
+                      className="text-xs font-bold text-slate-700 flex items-center space-x-1.5"
+                    >
+                      <Lock
+                        className={`w-3.5 h-3.5 ${
+                          roleTab === 'admin' ? 'text-blue-600' : 'text-violet-600'
+                        }`}
+                      />
+                      <span>Password</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="traket-login-password"
+                        ref={passwordInputRef}
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          if (error) setError('');
+                        }}
+                        placeholder="Enter your password"
+                        className={`w-full pl-3.5 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none transition ${
+                          roleTab === 'admin'
+                            ? 'focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15'
+                            : 'focus:border-violet-600 focus:ring-2 focus:ring-violet-600/15'
+                        }`}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1.5 cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Remember Me + Forgot Password Row */}
+                  <div className="flex items-center justify-between pt-0.5 text-xs">
+                    <label
+                      htmlFor="traket-remember-me"
+                      className="flex items-center space-x-2 text-slate-600 hover:text-slate-900 cursor-pointer"
+                    >
+                      <input
+                        id="traket-remember-me"
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <span>Keep me signed in (7 days)</span>
+                    </label>
+
                     <button
                       type="button"
-                      onClick={() => setShowEmpPassword(!showEmpPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                      onClick={openForgotFlow}
+                      className={`font-semibold transition cursor-pointer ${
+                        roleTab === 'admin'
+                          ? 'text-blue-600 hover:text-blue-800'
+                          : 'text-violet-600 hover:text-violet-800'
+                      }`}
                     >
-                      {showEmpPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      Forgot password?
                     </button>
                   </div>
-                </div>
 
-                {/* Remember Me */}
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <label className="flex items-center space-x-2 text-slate-600 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
-                    />
-                    <span className="font-medium">Remember my login</span>
-                  </label>
-                </div>
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 active:from-blue-800 active:to-indigo-800 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
-                >
-                  {isLoading ? (
-                    <span>Verifying Employee Key...</span>
-                  ) : (
-                    <>
-                      <span>Enter Employee Workspace</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
+                  {/* Success Feedback */}
+                  {successBanner && (
+                    <div
+                      role="status"
+                      className="flex items-start space-x-2.5 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <span>{successBanner}</span>
+                    </div>
                   )}
-                </button>
-              </form>
-            )}
 
-            {/* Card Footer Help */}
-            <div className="mt-5 pt-4 border-t border-slate-100 text-center">
-              <p className="text-[11px] text-slate-400 flex items-center justify-center space-x-1">
-                <HelpCircle className="w-3 h-3 text-slate-400" />
-                <span>Forgot password? Contact your Traket dispatch admin.</span>
-              </p>
+                  {/* Error Feedback */}
+                  {error && (
+                    <div
+                      role="alert"
+                      aria-live="assertive"
+                      className="flex items-start space-x-2.5 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs"
+                    >
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className={`w-full py-3 rounded-xl text-sm font-bold text-white shadow-sm flex items-center justify-center space-x-2 transition disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer ${
+                      roleTab === 'admin'
+                        ? 'bg-blue-600 hover:bg-blue-700'
+                        : 'bg-violet-600 hover:bg-violet-700'
+                    }`}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Verifying Credentials...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>
+                          {roleTab === 'admin'
+                            ? 'Sign In to Admin HQ'
+                            : 'Sign In to Employee Desk'}
+                        </span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              ) : resetStep === 'request' ? (
+                <form onSubmit={handleRequestOtp} className="space-y-4" noValidate>
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-start space-x-2.5">
+                    <MessageSquare className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <span>
+                      Enter your{' '}
+                      {roleTab === 'admin'
+                        ? 'Admin Email or Username'
+                        : 'Employee ID or Email'}
+                      . We will send a 6-digit code to your registered WhatsApp number.
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="traket-reset-identifier"
+                      className="text-xs font-bold text-slate-700 block"
+                    >
+                      {roleTab === 'admin' ? 'Admin Email or Username' : 'Employee ID or Email'}
+                    </label>
+                    <input
+                      id="traket-reset-identifier"
+                      type="text"
+                      value={resetIdentifier}
+                      onChange={(e) => {
+                        setResetIdentifier(e.target.value);
+                        if (error) setError('');
+                      }}
+                      placeholder={
+                        roleTab === 'admin' ? 'admin@traket.in' : 'EMP001 or name@traket.in'
+                      }
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15 transition"
+                      required
+                    />
+                  </div>
+
+                  {error && (
+                    <div
+                      role="alert"
+                      aria-live="assertive"
+                      className="flex items-start space-x-2.5 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs"
+                    >
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center space-x-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotMode(false);
+                        setError('');
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Back</span>
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm flex items-center justify-center space-x-2 disabled:opacity-60 cursor-pointer"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Sending Code...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Send WhatsApp OTP</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <form onSubmit={handleConfirmReset} className="space-y-4" noValidate>
+                  {resetInfo && (
+                    <div
+                      role="status"
+                      className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs"
+                    >
+                      {resetInfo}
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="traket-reset-otp"
+                      className="text-xs font-bold text-slate-700 block"
+                    >
+                      6-Digit WhatsApp Code
+                    </label>
+                    <input
+                      id="traket-reset-otp"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={resetOtp}
+                      onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="123456"
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-mono tracking-[0.35em] text-center text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="traket-reset-newpass"
+                      className="text-xs font-bold text-slate-700 block"
+                    >
+                      New Password (min 6 characters)
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="traket-reset-newpass"
+                        type={showResetPass ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        value={resetNewPass}
+                        onChange={(e) => setResetNewPass(e.target.value)}
+                        placeholder="Enter a strong new password"
+                        className="w-full pl-3.5 pr-10 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowResetPass((prev) => !prev)}
+                        aria-label={showResetPass ? 'Hide password' : 'Show password'}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1.5 cursor-pointer"
+                      >
+                        {showResetPass ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="traket-reset-confirmpass"
+                      className="text-xs font-bold text-slate-700 block"
+                    >
+                      Confirm New Password
+                    </label>
+                    <input
+                      id="traket-reset-confirmpass"
+                      type={showResetPass ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      value={resetConfirmPass}
+                      onChange={(e) => setResetConfirmPass(e.target.value)}
+                      placeholder="Re-enter new password"
+                      className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/15"
+                      required
+                    />
+                  </div>
+
+                  {error && (
+                    <div
+                      role="alert"
+                      aria-live="assertive"
+                      className="flex items-start space-x-2.5 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs"
+                    >
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center space-x-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetStep('request');
+                        setError('');
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Back</span>
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm flex items-center justify-center space-x-2 disabled:opacity-60 cursor-pointer"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Updating Password...</span>
+                        </>
+                      ) : (
+                        <>
+                          <KeyRound className="w-3.5 h-3.5" />
+                          <span>Verify &amp; Set Password</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
-          </div>
+          </section>
         </div>
-      </div>
+      </main>
 
-      {/* Bottom Copyright */}
-      <div className="absolute bottom-3 left-0 right-0 z-10 text-center text-[10px] text-slate-400">
-        © 2026 Traket Logistics Private Limited. All Rights Reserved. Enterprise WhatsApp Dispatch CRM.
-      </div>
+      {/* Clean Minimal Footer matching Dashboard Chrome */}
+      <footer className="w-full bg-white border-t border-slate-200 py-3.5 px-4 text-center shrink-0">
+        <div className="text-xs text-slate-500 font-medium">
+          Traket Transport Solutions · Secure Dispatch &amp; Operations CRM
+        </div>
+      </footer>
     </div>
   );
 };
-
