@@ -32,6 +32,7 @@ import {
   SessionReminderLog,
   FreightBooking,
 } from '../../types';
+import { UserRole } from '../../context/RoleContext';
 import {
   sendReminderStage,
   formatStateLabel,
@@ -49,6 +50,8 @@ interface InquiriesDeskProps {
   employees?: Employee[];
   bookings?: FreightBooking[];
   onUpdateSupportStatus: (userId: string, status: SupportTicket['status']) => void;
+  role?: UserRole;
+  currentEmployee?: Employee | null;
 }
 
 export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
@@ -57,7 +60,11 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
   employees = [],
   bookings = [],
   onUpdateSupportStatus,
+  role = 'admin',
+  currentEmployee = null,
 }) => {
+  const isAdmin = role === 'admin';
+  const [employeeInquiryScope, setEmployeeInquiryScope] = useState<'mine' | 'all'>('all');
   const [activeSubTab, setActiveSubTab] = useState<'sessions' | 'support'>('sessions');
   const [sessionFilter, setSessionFilter] = useState<
     'all' | 'active_window' | 'stage1_due' | 'stage2_due' | 'stage3_due' | 'expired_window'
@@ -413,28 +420,6 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
     setTimeout(() => setSuccessToast(null), 5000);
   };
 
-  // Background interval for Auto-Reminder Engine
-  useEffect(() => {
-    if (!isAutoEngineEnabled) return;
-    const interval = setInterval(() => {
-      halfWaySessions.forEach((s) => {
-        const stage = getNextDueStage(s);
-        if (stage) {
-          sendReminderStage(s.phone, stage, s.state)
-            .then((res) => {
-              if (res.success) {
-                const updated = dbService.saveReminderLog(s.user_id, stage, res.messageId);
-                setReminderLogs((prev) => ({ ...prev, [s.user_id]: updated }));
-              }
-            })
-            .catch((e) => console.warn('Auto background reminder error:', e));
-        }
-      });
-    }, 60000);
-
-    return () => clearInterval(interval);
-  }, [isAutoEngineEnabled, halfWaySessions, reminderLogs]);
-
   // Counts for KPI filter cards
   const activeWindowCount = halfWaySessions.filter((s) => getWindowInfo(s.updated_at).isOpen).length;
   const expiredWindowCount = halfWaySessions.length - activeWindowCount;
@@ -442,9 +427,15 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
   const stage2DueCount = halfWaySessions.filter((s) => getNextDueStage(s) === 2).length;
   const stage3DueCount = halfWaySessions.filter((s) => getNextDueStage(s) === 3).length;
 
-  // Filtered session list with text search
+  // Filtered session list with text search and role scoping
   const filteredSessions = useMemo(() => {
     return halfWaySessions.filter((s) => {
+      // Employee inquiry scope filter
+      if (!isAdmin && employeeInquiryScope === 'mine' && currentEmployee) {
+        const asgn = sessionAssignments[s.user_id];
+        if (!asgn || asgn.assigned_to !== currentEmployee.employee_id) return false;
+      }
+
       const info = getWindowInfo(s.updated_at);
       const due = getNextDueStage(s);
 
@@ -469,7 +460,7 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
 
       return true;
     });
-  }, [halfWaySessions, sessionFilter, searchQuery, sessionAssignments]);
+  }, [halfWaySessions, sessionFilter, searchQuery, sessionAssignments, isAdmin, employeeInquiryScope, currentEmployee]);
 
   return (
     <div className="space-y-5 max-w-7xl mx-auto pb-12">
@@ -520,6 +511,34 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
 
         {/* Right: Quick Action Controls */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Employee Scope Pill (My Inquiries vs All Inquiries) */}
+          {!isAdmin && currentEmployee && (
+            <div className="flex items-center rounded-xl bg-slate-100 p-0.5 border border-slate-200 text-xs">
+              <button
+                type="button"
+                onClick={() => setEmployeeInquiryScope('all')}
+                className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                  employeeInquiryScope === 'all'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All Inquiries
+              </button>
+              <button
+                type="button"
+                onClick={() => setEmployeeInquiryScope('mine')}
+                className={`px-2.5 py-1 rounded-lg font-semibold transition cursor-pointer ${
+                  employeeInquiryScope === 'mine'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Assigned to Me
+              </button>
+            </div>
+          )}
+
           {/* How it works toggle */}
           <button
             onClick={() => setShowHowItWorks((v) => !v)}
@@ -530,15 +549,17 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
             <span>How It Works</span>
           </button>
 
-          {/* Auto-Assign */}
-          <button
-            onClick={handleAutoAssign}
-            className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold flex items-center space-x-1.5 transition shadow-xs"
-            title="Distribute unassigned drop-off leads among team members"
-          >
-            <Users className="w-3.5 h-3.5 text-blue-600" />
-            <span>Auto-Assign</span>
-          </button>
+          {/* Auto-Assign (Admin only) */}
+          {isAdmin && (
+            <button
+              onClick={handleAutoAssign}
+              className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold flex items-center space-x-1.5 transition shadow-xs cursor-pointer"
+              title="Distribute unassigned drop-off leads among team members"
+            >
+              <Users className="w-3.5 h-3.5 text-blue-600" />
+              <span>Auto-Assign</span>
+            </button>
+          )}
 
           {/* Run Reminders */}
           <button
@@ -947,7 +968,7 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
                           <div className="flex items-center space-x-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
                             <User className="w-3.5 h-3.5 text-slate-500" />
                             <span className="text-slate-500 text-[11px]">Owner:</span>
-                            {employees.length > 0 ? (
+                            {isAdmin && employees.length > 0 ? (
                               <select
                                 value={assignment?.assigned_to || ''}
                                 onChange={(e) => handleAssignSingle(s.user_id, e.target.value)}
@@ -965,8 +986,13 @@ export const InquiriesDesk: React.FC<InquiriesDeskProps> = ({
                                   ))}
                               </select>
                             ) : (
-                              <span className="font-bold text-slate-700">
+                              <span className="font-bold text-slate-800 text-xs">
                                 {assignment?.assigned_name || 'Unassigned'}
+                                {assignment?.assigned_to === currentEmployee?.employee_id && (
+                                  <span className="ml-1 text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                                    (You)
+                                  </span>
+                                )}
                               </span>
                             )}
                           </div>

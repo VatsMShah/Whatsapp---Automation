@@ -279,12 +279,30 @@ async function findEmployeeByIdentifier(supabase, identifier) {
 
   if (byId.error || byId.data) return byId;
 
-  return supabase
+  const byEmail = await supabase
     .from('employees')
     .select('*')
     .ilike('email', clean)
     .limit(1)
     .maybeSingle();
+
+  if (byEmail.error || byEmail.data) return byEmail;
+
+  // Also support employee login / password reset by registered mobile phone number
+  const digits = clean.replace(/\D/g, '');
+  if (digits.length >= 10) {
+    const short10 = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+    const byPhone = await supabase
+      .from('employees')
+      .select('*')
+      .or(`phone.eq.${digits},phone.eq.${short10},phone.ilike.%${short10}%`)
+      .limit(1)
+      .maybeSingle();
+
+    if (byPhone.data) return byPhone;
+  }
+
+  return { data: null, error: null };
 }
 
 async function sendWhatsAppResetOtp(phone, name, otp) {

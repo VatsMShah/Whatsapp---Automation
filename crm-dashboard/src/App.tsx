@@ -135,9 +135,9 @@ function AppInner() {
 
     if (currentRole === 'employee' && activeEmployee) {
       relevantBookings = currentBookings.filter((b) => {
-        if (b.status !== 'new') return false;
+        if (['completed', 'cancelled'].includes(b.status)) return false;
         const assignment = currentAssignments[b.user_id];
-        return assignment && assignment.assigned_to === activeEmployee.employee_id;
+        return Boolean(assignment && assignment.assigned_to === activeEmployee.employee_id);
       });
     } else {
       // In Admin view, track all new leads requiring dispatch or attention
@@ -165,11 +165,17 @@ function AppInner() {
       const assignment = currentAssignments[b.user_id];
       const isOverdue = Date.now() - new Date(b.updated_at).getTime() > 25 * 60 * 1000;
       const isViewed = viewedSet.has(b.user_id);
+      const isTransfer = Boolean(assignment?.transferred_from || assignment?.transfer_note?.startsWith('Transfer'));
+      const defaultTitle = isTransfer
+        ? 'Transferred Lead'
+        : assignment?.assigned_to
+        ? 'Assigned Lead'
+        : 'New Freight Booking';
 
       return {
         id: `alert_${b.user_id}`,
         bookingId: b.user_id,
-        title: isOverdue ? 'Overdue Lead Follow-up' : (assignment?.assigned_to ? 'Assigned Lead' : 'New Freight Booking'),
+        title: isOverdue ? 'Overdue Lead Follow-up' : defaultTitle,
         customerName: b.contact_name || 'Inquiry Contact',
         phone: b.phone,
         companyName: b.company_name,
@@ -668,6 +674,8 @@ function AppInner() {
               employees={employees}
               bookings={bookings}
               onUpdateSupportStatus={handleUpdateSupportStatus}
+              role={role}
+              currentEmployee={currentEmployee}
             />
           )}
 

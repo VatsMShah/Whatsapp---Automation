@@ -17,6 +17,8 @@ import {
   ArrowRightLeft,
   Users,
   Sparkles,
+  Check,
+  AlertCircle,
 } from 'lucide-react';
 import { FreightBooking, Employee, LeadAssignment } from '../../types';
 import { UserRole } from '../../context/RoleContext';
@@ -58,6 +60,9 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
   const [selectedBooking, setSelectedBooking] = useState<FreightBooking | null>(null);
   const [remarksInput, setRemarksInput] = useState<string>('');
   const [isSavingRemarks, setIsSavingRemarks] = useState(false);
+  const [remarksSuccess, setRemarksSuccess] = useState(false);
+  const [remarksError, setRemarksError] = useState<string | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [activeGlowId, setActiveGlowId] = useState<string | null>(null);
 
   // Auto-select and scroll to highlighted booking when deep-linked
@@ -115,6 +120,15 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
     return phone;
   };
 
+  // Helper to format WhatsApp URL ensuring valid international prefix for Indian numbers
+  const getWhatsAppUrl = (phone?: string, text?: string) => {
+    if (!phone) return '#';
+    let clean = phone.replace(/\D/g, '');
+    if (clean.length === 10) clean = `91${clean}`;
+    const base = `https://wa.me/${clean}`;
+    return text ? `${base}?text=${encodeURIComponent(text)}` : base;
+  };
+
   // Filter logic
   const filtered = bookings.filter((b) => {
     const query = searchQuery.toLowerCase().trim();
@@ -155,8 +169,9 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
       (approverFilter === 'corporate' && hasSeparateApprover) ||
       (approverFilter === 'direct' && !hasSeparateApprover);
 
-    // Employee view: only show leads assigned to current employee
-    if (!isAdmin && currentEmployee) {
+    // Employee view: only show leads assigned to current employee (strictly block if employee session not loaded)
+    if (!isAdmin) {
+      if (!currentEmployee) return false;
       const a = assignments[b.user_id];
       if (!a || a.assigned_to !== currentEmployee.employee_id) return false;
     }
@@ -304,8 +319,9 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
   // Pre-filtered base set for tab counts — respects employee scope & employee filter dropdown
   // (but ignores statusFilter so counts always reflect true totals per tab)
   const scopedBookings = bookings.filter((b) => {
-    // Employee view: only show leads assigned to current employee
-    if (!isAdmin && currentEmployee) {
+    // Employee view: only show leads assigned to current employee (strictly block if employee session not loaded)
+    if (!isAdmin) {
+      if (!currentEmployee) return false;
       const a = assignments[b.user_id];
       if (!a || a.assigned_to !== currentEmployee.employee_id) return false;
     }
@@ -370,14 +386,38 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
   const openDetailsModal = (b: FreightBooking) => {
     setSelectedBooking(b);
     setRemarksInput(b.remarks || '');
+    setRemarksSuccess(false);
+    setRemarksError(null);
+  };
+
+  const handleStatusChange = async (userId: string, newStatus: FreightBooking['status']) => {
+    setUpdatingStatusId(userId);
+    try {
+      await onUpdateStatus(userId, newStatus);
+    } catch (err: any) {
+      console.error('Failed to update lead status:', err);
+      alert(`Status update failed: ${err?.message || 'Database error'}`);
+    } finally {
+      setUpdatingStatusId(null);
+    }
   };
 
   const handleSaveRemarks = async () => {
     if (!selectedBooking) return;
     setIsSavingRemarks(true);
-    await onUpdateStatus(selectedBooking.user_id, selectedBooking.status, remarksInput);
-    setSelectedBooking({ ...selectedBooking, remarks: remarksInput });
-    setIsSavingRemarks(false);
+    setRemarksSuccess(false);
+    setRemarksError(null);
+    try {
+      await onUpdateStatus(selectedBooking.user_id, selectedBooking.status, remarksInput);
+      setSelectedBooking({ ...selectedBooking, remarks: remarksInput });
+      setRemarksSuccess(true);
+      setTimeout(() => setRemarksSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Failed to save remarks:', err);
+      setRemarksError(err?.message || 'Failed to save notes');
+    } finally {
+      setIsSavingRemarks(false);
+    }
   };
 
   return (
@@ -608,7 +648,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                             <div className="flex items-center space-x-1 text-slate-700 font-mono text-[11px]">
                               <Phone className="w-3 h-3 text-slate-400 shrink-0" />
                               <a
-                                href={`https://wa.me/${(b.submitter_phone || b.phone).replace(/\D/g, '')}`}
+                                href={getWhatsAppUrl(b.submitter_phone || b.phone)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="hover:text-blue-600"
@@ -640,7 +680,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                               {formatPhone(b.phone)}
                             </a>
                             <a
-                              href={`https://wa.me/${(b.phone || '').replace(/\D/g, '')}`}
+                              href={getWhatsAppUrl(b.phone)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-[9px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-1.5 py-0.2 rounded border border-emerald-200 transition"
@@ -663,7 +703,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                                 {formatPhone(b.alternate_phone || b.approver_phone)}
                               </a>
                               <a
-                                href={`https://wa.me/${(b.alternate_phone || b.approver_phone || '').replace(/\D/g, '')}`}
+                                href={getWhatsAppUrl(b.alternate_phone || b.approver_phone)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-[9px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-1 py-0.2 rounded border border-emerald-200 transition"
@@ -832,10 +872,11 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
                         <select
                           value={b.status}
+                          disabled={updatingStatusId === b.user_id}
                           onChange={(e) =>
-                            onUpdateStatus(b.user_id, e.target.value as FreightBooking['status'])
+                            handleStatusChange(b.user_id, e.target.value as FreightBooking['status'])
                           }
-                          className={`text-[11px] font-semibold rounded-lg px-2 py-1 border focus:outline-none cursor-pointer transition ${badge.color}`}
+                          className={`text-[11px] font-semibold rounded-lg px-2 py-1 border focus:outline-none cursor-pointer transition ${badge.color} disabled:opacity-50`}
                         >
                           <option value="new" className="bg-white text-blue-700">🟢 New Lead</option>
                           <option value="quoted" className="bg-white text-amber-700">🟡 Quoted</option>
@@ -1020,7 +1061,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                       {formatPhone(selectedBooking.submitter_phone || selectedBooking.phone)}
                     </span>
                     <a
-                      href={`https://wa.me/${(selectedBooking.submitter_phone || selectedBooking.phone).replace(/\D/g, '')}`}
+                      href={getWhatsAppUrl(selectedBooking.submitter_phone || selectedBooking.phone)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold text-[10px] transition"
@@ -1060,7 +1101,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                           Call
                         </a>
                         <a
-                          href={`https://wa.me/${(selectedBooking.phone || '').replace(/\D/g, '')}`}
+                          href={getWhatsAppUrl(selectedBooking.phone)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] border border-emerald-200 transition"
@@ -1089,7 +1130,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                             Call
                           </a>
                           <a
-                            href={`https://wa.me/${(selectedBooking.alternate_phone || selectedBooking.approver_phone || '').replace(/\D/g, '')}`}
+                            href={getWhatsAppUrl(selectedBooking.alternate_phone || selectedBooking.approver_phone)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] border border-emerald-200 transition"
@@ -1112,17 +1153,35 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
                   Rate Quote & Internal Notes
                 </h4>
-                <button
-                  onClick={handleSaveRemarks}
-                  disabled={isSavingRemarks}
-                  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60"
-                >
-                  {isSavingRemarks ? 'Saving...' : 'Save Notes'}
-                </button>
+                <div className="flex items-center space-x-2">
+                  {remarksSuccess && (
+                    <span className="text-[11px] font-bold text-emerald-600 flex items-center space-x-1 animate-in fade-in">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Saved!</span>
+                    </span>
+                  )}
+                  {remarksError && (
+                    <span className="text-[11px] font-bold text-rose-600 flex items-center space-x-1 animate-in fade-in">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      <span>{remarksError}</span>
+                    </span>
+                  )}
+                  <button
+                    onClick={handleSaveRemarks}
+                    disabled={isSavingRemarks}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60 cursor-pointer"
+                  >
+                    {isSavingRemarks ? 'Saving...' : 'Save Notes'}
+                  </button>
+                </div>
               </div>
               <textarea
                 value={remarksInput}
-                onChange={(e) => setRemarksInput(e.target.value)}
+                onChange={(e) => {
+                  setRemarksInput(e.target.value);
+                  if (remarksSuccess) setRemarksSuccess(false);
+                  if (remarksError) setRemarksError(null);
+                }}
                 placeholder="Add quotation price (e.g. Quoted ₹42,000 for 21T Taurus), driver contact, or notes..."
                 rows={3}
                 className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500"
