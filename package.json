@@ -15,6 +15,7 @@
     "supabase:deploy:auth": "npx -y supabase functions deploy auth --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api",
     "supabase:deploy:webhook": "npx supabase functions deploy webhook --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api",
     "supabase:deploy:traket": "npx supabase functions deploy TraketFUnction --project-ref njmzdeddmangggeukjce --no-verify-jwt --use-api",
+    "test": "node --test tests/*.test.js",
     "dashboard:dev": "npm --prefix crm-dashboard run dev",
     "dashboard:build": "npm --prefix crm-dashboard run build",
     "sync:sheets": "node src/sync-database-to-sheet.js"
