@@ -626,6 +626,32 @@ async function handleAuthRequest(req, res) {
       });
     }
 
+    // 4b. REFRESH SESSION JWT
+    if (action === 'refresh_token') {
+      const auth = await authenticateRequest(req, body, supabase);
+      if (!auth) {
+        return res.status(401).json({ success: false, error: 'Session expired or invalid.' });
+      }
+      const ttl = 7 * 24 * 3600;
+      const { token: newToken, expiresAt } = signJwt(
+        {
+          sub: auth.claims.sub,
+          role: auth.claims.role,
+          username: auth.claims.username,
+          email: auth.claims.email,
+          employee_id: auth.claims.employee_id,
+        },
+        ttl
+      );
+      return res.json({
+        success: true,
+        token: newToken,
+        expiresAt,
+        role: auth.claims.role,
+        user: auth.user,
+      });
+    }
+
     // 5. CHANGE PASSWORD (Authenticated User)
     if (action === 'change_password') {
       const auth = await authenticateRequest(req, body, supabase);
@@ -975,4 +1001,4 @@ async function handleAuthRequest(req, res) {
   }
 }
 
-module.exports = { handleAuthRequest };
+module.exports = { handleAuthRequest, verifyJwt, signJwt };

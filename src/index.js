@@ -3,10 +3,47 @@ const config = require('./config');
 const logger = require('./utils/logger');
 const { handleVerification, isValidSignature } = require('./webhook/verify');
 const { handleIncomingMessage } = require('./webhook/handler');
-const { handleAuthRequest } = require('./routes/auth');
+const { handleAuthRequest, verifyJwt } = require('./routes/auth');
 const whatsapp = require('./services/whatsapp');
 
 const app = express();
+
+/**
+ * Authentication Middleware: Protects sensitive backend dispatch & reminder routes
+ */
+function requireAuth(req, res, next) {
+  const token =
+    req.header('x-traket-token') ||
+    (req.header('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'Authentication required. Missing session token.' });
+  }
+
+  const payload = verifyJwt(token);
+  if (!payload) {
+    return res.status(401).json({ success: false, error: 'Invalid or expired session token.' });
+  }
+
+  req.user = payload;
+  next();
+}
+
+/**
+ * Auth Middleware with Localhost fallback (e.g. for internal cron scripts)
+ */
+function requireAuthOrLocal(req, res, next) {
+  const ip = req.ip || req.connection?.remoteAddress || '';
+  const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+  const token =
+    req.header('x-traket-token') ||
+    (req.header('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+
+  if (isLocal && !token) {
+    return next();
+  }
+  return requireAuth(req, res, next);
+}
 
 // Enable CORS for CRM Dashboard & local clients
 app.use((req, res, next) => {
@@ -35,7 +72,7 @@ app.get('/health', (_req, res) => res.status(200).send('ok'));
 app.post('/api/auth', handleAuthRequest);
 
 // Secure backend proxy for WhatsApp dispatch (keeps Meta token off the client)
-app.post('/api/whatsapp/send', async (req, res) => {
+app.post('/api/whatsapp/send', requireAuth, async (req, res) => {
   try {
     const { to, type, text, bodyText, buttons } = req.body || {};
     if (!to) {
@@ -60,12 +97,12 @@ app.post('/api/whatsapp/send', async (req, res) => {
 // Auto-reminders API
 const reminders = require('./services/reminders');
 
-app.get('/api/reminders/logs', (_req, res) => {
+app.get('/api/reminders/logs', requireAuth, (_req, res) => {
   const logs = reminders.loadReminderLogs();
   res.json({ success: true, logs });
 });
 
-app.post('/api/reminders/send', async (req, res) => {
+app.post('/api/reminders/send', requireAuth, async (req, res) => {
   try {
     const { session, stage } = req.body;
     if (!session || !stage) {
@@ -79,7 +116,7 @@ app.post('/api/reminders/send', async (req, res) => {
   }
 });
 
-app.post('/api/reminders/auto-process', async (_req, res) => {
+app.post('/api/reminders/auto-process', requireAuthOrLocal, async (_req, res) => {
   try {
     const result = await reminders.processAutoReminders();
     res.json({ success: true, ...result });

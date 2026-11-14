@@ -140,18 +140,21 @@ async function syncAllToSheet() {
 
         // Save local CSV file for extra safety
         try {
+          const safeCell = (val) => {
+            if (val === undefined || val === null) return '""';
+            let str = typeof val === 'object' ? JSON.stringify(val) : String(val);
+            if (/^[=+\-@]/.test(str)) {
+              str = `'${str}`;
+            }
+            return `"${str.replace(/"/g, '""')}"`;
+          };
           const csvLines = [headers.map((h) => `"${h}"`).join(',')];
           mRows.forEach((r) => {
-            const rowVals = headers.map((h) => {
-              const val = r[h];
-              if (val === undefined || val === null) return '""';
-              const str = typeof val === 'object' ? JSON.stringify(val) : String(val);
-              return `"${str.replace(/"/g, '""')}"`;
-            });
+            const rowVals = headers.map((h) => safeCell(r[h]));
             csvLines.push(rowVals.join(','));
           });
           const localCsvPath = path.join(backupDir, `TRAKET_BACKUP_${mKey}.csv`);
-          fs.writeFileSync(localCsvPath, csvLines.join('\n'), 'utf8');
+          fs.writeFileSync(localCsvPath, csvLines.join('\r\n'), 'utf8');
           logger.info(`💾 Saved local month backup file: backups/monthly/TRAKET_BACKUP_${mKey}.csv`);
         } catch (csvErr) {
           logger.warn(`Could not save local CSV backup for ${mKey}:`, csvErr.message);

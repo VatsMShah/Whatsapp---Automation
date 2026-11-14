@@ -213,6 +213,18 @@ export const authService = {
     };
   },
 
+  async refreshToken(): Promise<boolean> {
+    const token = getStoredToken();
+    if (!token) return false;
+    const { status, data } = await callAuth<AdminUserProfile | Employee>('refresh_token');
+    if (status === 200 && data.success && data.token) {
+      const isRemembered = Boolean(localStorage.getItem(TOKEN_STORAGE_KEY));
+      saveStoredToken(data.token, isRemembered);
+      return true;
+    }
+    return false;
+  },
+
   async verifySession(): Promise<{
     valid: boolean;
     role?: 'admin' | 'employee';
@@ -231,6 +243,11 @@ export const authService = {
       }
       return { valid: false };
     }
+
+    // Auto-refresh token in background so active users never experience abrupt session drop
+    try {
+      this.refreshToken().catch(() => {});
+    } catch {}
 
     return {
       valid: true,

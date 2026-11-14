@@ -299,12 +299,12 @@ export const ArchiveDesk: React.FC<ArchiveDeskProps> = ({
     }
 
     if (periodPreset === 'this_week') {
-      // Monday of current week
-      const day = now.getDay();
-      const diffToMonday = now.getDate() - day + (day === 0 ? -6 : 1);
-      const start = new Date(now.setDate(diffToMonday));
+      const start = new Date(now.getTime());
+      const day = start.getDay();
+      const diffToMonday = start.getDate() - day + (day === 0 ? -6 : 1);
+      start.setDate(diffToMonday);
       start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
+      const end = new Date(start.getTime());
       end.setDate(start.getDate() + 6);
       end.setHours(23, 59, 59, 999);
       return {
@@ -315,11 +315,12 @@ export const ArchiveDesk: React.FC<ArchiveDeskProps> = ({
     }
 
     if (periodPreset === 'last_week') {
-      const day = now.getDay();
-      const diffToMonday = now.getDate() - day + (day === 0 ? -6 : 1) - 7;
-      const start = new Date(now.setDate(diffToMonday));
+      const start = new Date(now.getTime());
+      const day = start.getDay();
+      const diffToMonday = start.getDate() - day + (day === 0 ? -6 : 1) - 7;
+      start.setDate(diffToMonday);
       start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
+      const end = new Date(start.getTime());
       end.setDate(start.getDate() + 6);
       end.setHours(23, 59, 59, 999);
       return {
@@ -330,12 +331,14 @@ export const ArchiveDesk: React.FC<ArchiveDeskProps> = ({
     }
 
     // Custom
-    const start = new Date(`${customStartDate}T00:00:00`);
-    const end = new Date(`${customEndDate}T23:59:59.999`);
+    const parsedStart = customStartDate ? new Date(`${customStartDate}T00:00:00`) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const start = isNaN(parsedStart.getTime()) ? new Date(now.getFullYear(), now.getMonth(), 1) : parsedStart;
+    const parsedEnd = customEndDate ? new Date(`${customEndDate}T23:59:59.999`) : new Date();
+    const end = isNaN(parsedEnd.getTime()) ? new Date() : parsedEnd;
     return {
       dateRangeStart: start,
       dateRangeEnd: end,
-      periodLabel: `Custom (${customStartDate} to ${customEndDate})`,
+      periodLabel: `Custom (${customStartDate || 'Start'} to ${customEndDate || 'End'})`,
     };
   }, [periodPreset, selectedMonthKey, customStartDate, customEndDate]);
 
@@ -420,15 +423,25 @@ export const ArchiveDesk: React.FC<ArchiveDeskProps> = ({
 
     const safeCsvCell = (val: any) => {
       if (val === null || val === undefined) return '""';
-      const str = String(val).replace(/"/g, '""');
-      return `"${str}"`;
+      let str = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      if (/^[=+\-@]/.test(str)) {
+        str = `'${str}`;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
     };
+
+    const startIso = isNaN(dateRangeStart.getTime())
+      ? new Date().toISOString().split('T')[0]
+      : dateRangeStart.toISOString().split('T')[0];
+    const endIso = isNaN(dateRangeEnd.getTime())
+      ? new Date().toISOString().split('T')[0]
+      : dateRangeEnd.toISOString().split('T')[0];
 
     // Bank statement metadata header
     const metadataLines = [
       `"TRAKET LOGISTICS HUB - OFFICIAL PERIOD STATEMENT"`,
       `"Statement Period:",${safeCsvCell(periodLabel)}`,
-      `"Date Range:",${safeCsvCell(`${dateRangeStart.toISOString().split('T')[0]} to ${dateRangeEnd.toISOString().split('T')[0]}`)}`,
+      `"Date Range:",${safeCsvCell(`${startIso} to ${endIso}`)}`,
       `"Generated At:",${safeCsvCell(new Date().toLocaleString('en-IN'))}`,
       `"Total Records in Statement:",${safeCsvCell(filteredRecords.length)}`,
       `"Completed Freight Orders:",${safeCsvCell(metrics.completedOrders)}`,
@@ -512,8 +525,11 @@ export const ArchiveDesk: React.FC<ArchiveDeskProps> = ({
 
     const safeCsvCell = (val: any) => {
       if (val === null || val === undefined) return '""';
-      const str = String(val).replace(/"/g, '""');
-      return `"${str}"`;
+      let str = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      if (/^[=+\-@]/.test(str)) {
+        str = `'${str}`;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
     };
 
     const header = [

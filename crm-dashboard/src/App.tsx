@@ -490,7 +490,22 @@ function AppInner() {
   };
 
   const handleExportCsv = () => {
-    if (bookings.length === 0) return;
+    // Strict isolation: Employees only export their own assigned leads
+    const exportableBookings = isAdmin
+      ? bookings
+      : bookings.filter((b) => {
+          const asgn = assignments[b.user_id];
+          return (
+            asgn &&
+            (asgn.assigned_to === currentEmployee?.employee_id ||
+              asgn.assigned_to === currentEmployee?.id)
+          );
+        });
+
+    if (exportableBookings.length === 0) {
+      alert(isAdmin ? 'No bookings available to export.' : 'You have no assigned leads to export.');
+      return;
+    }
 
     const headers = [
       'Date', 'Status', 'Assigned Specialist', 'Specialist ID', 'Assignment Date', 'Transfer Note',
@@ -499,42 +514,58 @@ function AppInner() {
       'Lead Submitter', 'Submitter Phone', 'Company Name', 'Remarks',
     ];
 
-    const rows = bookings.map((b) => {
+    // RFC 4180 compliant CSV sanitizer with formula injection neutralization (CWE-1236)
+    const safeCsvCell = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      let str = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      // Neutralize formula triggers in Excel/Calc (=, +, -, @)
+      if (/^[=+\-@]/.test(str)) {
+        str = `'${str}`;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const rows = exportableBookings.map((b) => {
       const assignment = assignments[b.user_id];
       const assignedEmp = assignment?.assigned_to
         ? employees.find((e) => e.employee_id === assignment.assigned_to)
         : null;
+
+      const dateStr = b.updated_at ? new Date(b.updated_at).toLocaleDateString() : '';
+      const asgnDateStr = assignment?.assigned_at ? new Date(assignment.assigned_at).toLocaleDateString() : '';
+
       return [
-        `"${new Date(b.updated_at).toLocaleDateString()}"`,
-        `"${b.status}"`,
-        `"${assignedEmp?.name || 'Unassigned'}"`,
-        `"${assignedEmp?.employee_id || ''}"`,
-        `"${assignment?.assigned_at ? new Date(assignment.assigned_at).toLocaleDateString() : ''}"`,
-        `"${(assignment?.transfer_note || '').replace(/"/g, '""')}"`,
-        `"${b.originCity || b.origin}"`,
-        `"${b.destinationCity || b.destination}"`,
-        `"${b.cargo_type}"`,
-        `"${b.vehicle_or_container}"`,
-        `"${b.weight}"`,
-        `"${b.loading_date}"`,
-        `"${b.time_slot}"`,
-        `"${b.approver_name || b.contact_name || ''}"`,
-        `"${b.approver_phone || b.alternate_phone || b.phone || ''}"`,
-        `"${b.approver_role || ''}"`,
-        `"${b.is_decision_maker === false ? 'Corporate (On Behalf)' : 'Direct Decision-Maker (Self)'}"`,
-        `"${b.submitter_name || b.contact_name || ''}"`,
-        `"${b.submitter_phone || b.phone || ''}"`,
-        `"${b.company_name}"`,
-        `"${(b.remarks || '').replace(/"/g, '""')}"`,
+        safeCsvCell(dateStr),
+        safeCsvCell(b.status || 'new'),
+        safeCsvCell(assignedEmp?.name || 'Unassigned'),
+        safeCsvCell(assignedEmp?.employee_id || ''),
+        safeCsvCell(asgnDateStr),
+        safeCsvCell(assignment?.transfer_note || ''),
+        safeCsvCell(b.originCity || b.origin || ''),
+        safeCsvCell(b.destinationCity || b.destination || ''),
+        safeCsvCell(b.cargo_type || ''),
+        safeCsvCell(b.vehicle_or_container || ''),
+        safeCsvCell(b.weight || ''),
+        safeCsvCell(b.loading_date || ''),
+        safeCsvCell(b.time_slot || ''),
+        safeCsvCell(b.approver_name || b.contact_name || ''),
+        safeCsvCell(b.approver_phone || b.alternate_phone || b.phone || ''),
+        safeCsvCell(b.approver_role || ''),
+        safeCsvCell(b.is_decision_maker === false ? 'Corporate (On Behalf)' : 'Direct Decision-Maker (Self)'),
+        safeCsvCell(b.submitter_name || b.contact_name || ''),
+        safeCsvCell(b.submitter_phone || b.phone || ''),
+        safeCsvCell(b.company_name || ''),
+        safeCsvCell(b.remarks || ''),
       ];
     });
 
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const csvContent = [headers.map(safeCsvCell).join(','), ...rows.map((r) => r.join(','))].join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
+    const prefix = isAdmin ? 'Traket_All_Freight_Orders' : `Traket_Leads_${currentEmployee?.employee_id || 'MyLeads'}`;
     link.href = url;
-    link.setAttribute('download', `Traket_Freight_Orders_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `${prefix}_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -658,13 +689,28 @@ function AppInner() {
             />
           )}
 
-          {currentTab === 'overview' && isAdmin && (
-            <DashboardOverview
-              bookings={bookings}
-              clientProfile={clientProfile}
-              inquiryCount={supportTickets.length + sessions.length}
-              onNavigateTab={setCurrentTab}
-            />
+          {currentTab === 'overview' && (
+            isAdmin ? (
+              <DashboardOverview
+                bookings={bookings}
+                clientProfile={clientProfile}
+                inquiryCount={supportTickets.length + sessions.length}
+                onNavigateTab={setCurrentTab}
+              />
+            ) : (
+              <BookingsTable
+                bookings={bookings}
+                searchQuery={searchQuery}
+                employees={employees}
+                assignments={assignments}
+                onUpdateStatus={handleUpdateBookingStatus}
+                role={role}
+                currentEmployee={currentEmployee}
+                onAssignLead={handleAssignLead}
+                onTransferLead={handleTransferLead}
+                highlightedBookingId={highlightedBookingId}
+              />
+            )
           )}
 
           {currentTab === 'inquiries' && (

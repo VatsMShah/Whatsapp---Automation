@@ -1,7 +1,21 @@
+import { authService } from './auth';
+
 const AUTH_URL = import.meta.env.VITE_AUTH_URL || 'http://localhost:3005/api/auth';
 const API_BASE = AUTH_URL.replace(/\/api\/auth\/?$/, '');
 
 export const SUPPORT_PHONE_DISPLAY = '+91 9820500159';
+
+function getAuthHeaders(): Record<string, string> {
+  const token = authService.getStoredToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['x-traket-token'] = token;
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 /**
  * Send WhatsApp plain text message via secure local backend proxy (no client-side token exposure)
@@ -16,9 +30,7 @@ export async function sendWhatsAppNudge(
 
     const res = await fetch(`${API_BASE}/api/whatsapp/send`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         to: recipient,
         type: 'text',
@@ -52,9 +64,7 @@ export async function sendWhatsAppInteractiveButtons(
 
     const res = await fetch(`${API_BASE}/api/whatsapp/send`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({
         to: recipient,
         type: 'interactive',

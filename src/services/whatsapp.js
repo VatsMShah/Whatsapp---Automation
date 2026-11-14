@@ -5,7 +5,16 @@ function graphUrl() {
   return `https://graph.facebook.com/${config.whatsapp.graphApiVersion}/${config.whatsapp.phoneNumberId}/messages`;
 }
 
+function cleanRecipient(to) {
+  const digits = String(to || '').replace(/[^0-9]/g, '');
+  return digits.length === 10 ? `91${digits}` : digits;
+}
+
 async function callGraphApi(body) {
+  if (body?.to) {
+    body.to = cleanRecipient(body.to);
+  }
+
   const res = await fetch(graphUrl(), {
     method: 'POST',
     headers: {

@@ -40,7 +40,7 @@ async function persistBookVehicle(output) {
     loadingTime: data.loadingTime || existing.timeSlot || '',
     company: data.company || existing.company || '',
     contactName: data.contactName || existing.contactName || '',
-    phone: data.phone || existing.phone || '',
+    phone: data.phone || existing.phone || output.phone || '',
     email: data.email || existing.email || '',
     alternatePhone: data.alternatePhone || existing.alternatePhone || '',
     website: data.website || existing.website || '',
@@ -87,7 +87,7 @@ async function persistProvideVehicle(output) {
     capacity: data.provider_capacity || existing.capacity || '',
     routePreference: data.provider_routes || existing.routePreference || '',
     availability: data.provider_availability || existing.availability || '',
-    driverPhone: data.provider_driverPhone || existing.driverPhone || '',
+    driverPhone: data.provider_driverPhone || existing.driverPhone || output.phone || '',
     currentLocation: data.provider_currentLocation || existing.currentLocation || '',
     // Replicated from original workflow — see NOTE above.
     notes: data.provider_capacity || existing.notes || '',

@@ -39,6 +39,11 @@ function processConversation(waMessagePayload, masterRows) {
         rawMessage = msg.interactive.nfm_reply.response_json || '';
       }
     }
+  } else if (msg?.type === 'location') {
+    const loc = msg.location || {};
+    rawMessage = loc.name || loc.address || `${loc.latitude},${loc.longitude}`;
+  } else if (msg?.type === 'image' || msg?.type === 'document') {
+    rawMessage = 'YES';
   }
 
   if (typeof rawMessage === 'object') {
@@ -69,7 +74,11 @@ function processConversation(waMessagePayload, masterRows) {
   }
 
   // ================= FORCE RESET ON HI =================
-  if (['hi', 'Hi', 'hello', 'start', 'restart'].includes(lowerMessage)) {
+  if (
+    ['hi', 'hello', 'hey', 'start', 'restart', 'menu', 'namaste'].includes(lowerMessage) ||
+    /^hi[\s!.]*$/i.test(lowerMessage) ||
+    /^hello[\s!.]*$/i.test(lowerMessage)
+  ) {
     const newSessionId = `${phone}_${Date.now()}`;
 
     return {
@@ -596,7 +605,8 @@ function processConversation(waMessagePayload, masterRows) {
     const text = message;
 
     const phoneMatch = text.match(/\d{10}/);
-    const phoneExtracted = phoneMatch ? phoneMatch[0] : '';
+    const fallbackPhone = phone !== 'unknown_user' ? phone.replace(/[^0-9]/g, '').slice(-10) : '';
+    const phoneExtracted = phoneMatch ? phoneMatch[0] : fallbackPhone;
 
     const emailMatch = text.match(/\S+@\S+\.\S+/);
     const emailExtracted = emailMatch ? emailMatch[0] : 'NA';
@@ -615,26 +625,38 @@ function processConversation(waMessagePayload, masterRows) {
     let company = '';
     let contactName = '';
 
-    if (lines.length >= 3) {
+    if (lines.length >= 2) {
       company = lines[0];
       contactName = lines[1];
     } else {
       let remaining = text.replace(phoneExtracted, '').replace(emailExtracted, '').replace(websiteExtracted, '').trim();
 
       let parts = remaining
-        .split(/,|-/)
+        .split(/,|-|\/|\n/)
         .map((p) => p.trim())
         .filter(Boolean);
 
       if (parts.length >= 2) {
         company = parts[0];
         contactName = parts[1];
+      } else if (parts.length === 1) {
+        contactName = parts[0];
+        company = 'Direct Transport Client';
       }
+    }
+
+    if (!contactName && !company) {
+      contactName = 'Valued Customer';
+      company = 'Direct Business';
+    } else if (!contactName) {
+      contactName = company;
+    } else if (!company) {
+      company = 'Direct Customer';
     }
 
     data.company = company;
     data.contactName = contactName;
-    data.phone = phoneExtracted;
+    data.phone = phoneExtracted || fallbackPhone || phone;
     data.email = emailExtracted;
     data.website = websiteExtracted;
 
@@ -649,7 +671,7 @@ function processConversation(waMessagePayload, masterRows) {
       'Goods type :  ' + (data.material || '') + '\n' +
       'Loading Date :' + (data.loadingDate || '') + '\n\n' +
       'Name :' + (data.contactName || '') + '\n\n' +
-      'Phone Number :' + (data.phone || '') + '\n\n' +
+      'Phone Number :' + (data.phone || phone || '') + '\n\n' +
       (data.alternatePhone ? ('Alternate Number :' + data.alternatePhone + '\n\n') : '') +
       'Thank you for Partnering with Us 🤝';
   } else if (state === 'support_flow') {

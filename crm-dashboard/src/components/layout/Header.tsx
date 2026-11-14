@@ -92,15 +92,15 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* Export CSV Button (admin only) */}
-        {onExportCsv && isAdmin && (
+        {/* Export CSV Button (Admin: All Orders | Employee: My Leads Only) */}
+        {onExportCsv && (
           <button
             onClick={onExportCsv}
-            title="Export orders as CSV"
+            title={isAdmin ? "Export all orders as CSV" : "Export your assigned leads as CSV"}
             className="hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-xs transition text-xs font-medium"
           >
             <Download className="w-3.5 h-3.5 text-blue-600" />
-            <span>Export CSV</span>
+            <span>{isAdmin ? 'Export CSV' : 'Export My Leads'}</span>
           </button>
         )}
 

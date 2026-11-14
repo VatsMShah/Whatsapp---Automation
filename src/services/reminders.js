@@ -127,26 +127,61 @@ async function processAutoReminders() {
       .from('users_master')
       .select('*')
       .order('updated_at', { ascending: false })
-      .limit(50);
+      .limit(100);
 
     if (error || !sessions) {
       logger.warn('Could not fetch sessions for auto reminders', error);
       return { processed: 0, sent: [] };
     }
 
+    // Query recent completed bookings so we NEVER send abandoned reminders to customers who already converted
+    const { data: recentBookings } = await client
+      .from('book_vehicle')
+      .select('phone, updated_at')
+      .order('updated_at', { ascending: false })
+      .limit(100);
+
+    const bookedPhoneMap = new Map();
+    (recentBookings || []).forEach((b) => {
+      const p = String(b.phone || '').replace(/[^0-9]/g, '').slice(-10);
+      if (p) {
+        const t = new Date(b.updated_at).getTime();
+        if (!bookedPhoneMap.has(p) || t > bookedPhoneMap.get(p)) {
+          bookedPhoneMap.set(p, t);
+        }
+      }
+    });
+
     const logs = loadReminderLogs();
     const now = Date.now();
     const sent = [];
+    const seenPhones = new Set();
 
     for (const session of sessions) {
-      // Skip completed or support states
-      const state = (session.state || '').toLowerCase();
-      if (['cta_menu', 'completed', 'support_flow', 'main_menu'].includes(state)) {
+      if (!session.phone) continue;
+
+      // Group by phone: Only evaluate the LATEST active session for each phone number
+      const normPhone = String(session.phone || '').replace(/[^0-9]/g, '').slice(-10);
+      if (seenPhones.has(normPhone)) {
+        continue;
+      }
+      seenPhones.add(normPhone);
+
+      // Check if user has already placed a booking recently
+      const sessionTime = new Date(session.updated_at).getTime();
+      const lastBookedAt = bookedPhoneMap.get(normPhone);
+      if (lastBookedAt && lastBookedAt >= sessionTime - 12 * 3600 * 1000) {
+        // Converted customer — skip reminders
         continue;
       }
 
-      const updatedAt = new Date(session.updated_at).getTime();
-      const elapsedHours = (now - updatedAt) / (1000 * 60 * 60);
+      // Skip completed, support or fresh main menu states
+      const state = (session.state || '').toLowerCase();
+      if (['cta_menu', 'completed', 'support_flow', 'main_menu', 'start'].includes(state)) {
+        continue;
+      }
+
+      const elapsedHours = (now - sessionTime) / (1000 * 60 * 60);
 
       // Must be within 24-hour Meta customer service window
       if (elapsedHours < 0 || elapsedHours > 24) {
