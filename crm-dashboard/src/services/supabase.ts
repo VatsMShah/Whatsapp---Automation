@@ -190,20 +190,40 @@ class SupabaseDataService {
   // --- FREIGHT BOOKINGS (book_vehicle untouched + separate lead_status table) ---
   async getBookings(): Promise<FreightBooking[]> {
     try {
-      // Fetch bookings and separate lead_status table in parallel
-      const [bookingsRes, statusRes] = await Promise.all([
-        this.client
-          .from('book_vehicle')
-          .select('*')
-          .order('updated_at', { ascending: false }),
-        this.client
-          .from('lead_status')
-          .select('*'),
-      ]);
+      let rawBookings: any[] = [];
+      let rawStatuses: any[] = [];
+      let completedSessions: any[] = [];
 
-      if (bookingsRes.error || !bookingsRes.data) {
-        console.warn('⚠️ Supabase getBookings unreachable or paused. Falling back to local offline backup cache.');
-        this.isOfflineMode = true;
+      // 1. Try authenticated backend endpoint first (bypasses anon RLS restrictions safely)
+      if (authService.getStoredToken()) {
+        const authRes = await authService.getBookings();
+        if (authRes.success) {
+          rawBookings = authRes.bookings || [];
+          rawStatuses = authRes.leadStatuses || [];
+          completedSessions = authRes.completedSessions || [];
+        }
+      }
+
+      // 2. Direct Supabase query fallback if backend not reachable or unauthenticated
+      if (rawBookings.length === 0 && completedSessions.length === 0) {
+        const [bookingsRes, statusRes] = await Promise.all([
+          this.client
+            .from('book_vehicle')
+            .select('*')
+            .order('updated_at', { ascending: false }),
+          this.client
+            .from('lead_status')
+            .select('*'),
+        ]);
+
+        if (bookingsRes.data && Array.isArray(bookingsRes.data)) {
+          rawBookings = bookingsRes.data;
+          rawStatuses = statusRes.data || [];
+        }
+      }
+
+      if (rawBookings.length === 0 && completedSessions.length === 0) {
+        console.warn('⚠️ Supabase getBookings returned no records. Checking local offline backup cache.');
         const cached = this.getCache<FreightBooking[]>('traket_cached_bookings');
         if (cached && cached.length > 0) return cached;
         return [];
@@ -214,14 +234,12 @@ class SupabaseDataService {
 
       // Map statuses from lead_status table
       const statusMap = new Map<string, { status: FreightBooking['status']; remarks?: string }>();
-      if (statusRes.data && Array.isArray(statusRes.data)) {
-        for (const s of statusRes.data) {
-          if (s.user_id) {
-            statusMap.set(s.user_id, {
-              status: s.status as FreightBooking['status'],
-              remarks: s.remarks,
-            });
-          }
+      for (const s of rawStatuses) {
+        if (s.user_id) {
+          statusMap.set(s.user_id, {
+            status: s.status as FreightBooking['status'],
+            remarks: s.remarks,
+          });
         }
       }
 
@@ -232,7 +250,7 @@ class SupabaseDataService {
 
       // Only include completed orders in Freight Orders Desk
       // Incomplete/half-chats are tracked in users_master -> Live Bot Sessions
-      const validCompletedOrders = (bookingsRes.data || []).filter((d: any) => {
+      const validCompletedOrders = rawBookings.filter((d: any) => {
         const hasRoute = Boolean(d.origin && d.destination);
         const hasContact = Boolean(d.contact_name || d.company_name);
         const isCompletedState =
@@ -248,54 +266,56 @@ class SupabaseDataService {
       });
 
       // Also pull recent completed booking sessions from users_master (state === 'cta_menu' and flow_type === 'book')
-      // This ensures 100% real-time instant synchronization of finished WhatsApp orders into Freight Orders Desk
-      try {
-        const { data: completedSessions } = await this.client
-          .from('users_master')
-          .select('*')
-          .eq('state', 'cta_menu')
-          .eq('flow_type', 'book')
-          .order('updated_at', { ascending: false })
-          .limit(50);
+      if (completedSessions.length === 0 && !authService.getStoredToken()) {
+        try {
+          const { data: directCompleted } = await this.client
+            .from('users_master')
+            .select('*')
+            .eq('state', 'cta_menu')
+            .eq('flow_type', 'book')
+            .order('updated_at', { ascending: false })
+            .limit(50);
+          if (directCompleted && Array.isArray(directCompleted)) {
+            completedSessions = directCompleted;
+          }
+        } catch (mergeErr) {
+          console.warn('Could not check users_master for completed bookings:', mergeErr);
+        }
+      }
 
-        if (completedSessions && Array.isArray(completedSessions)) {
-          for (const cs of completedSessions) {
-            if (!completedUserIds.has(cs.user_id)) {
-              const flowData = typeof cs.data === 'string' ? JSON.parse(cs.data || '{}') : cs.data || {};
-              const origin = flowData.loadingYard || flowData.stuffingAddress || flowData.loadingLocation || flowData.loadingPin || '';
-              const destination = flowData.unloadingAddress || flowData.portCfs || flowData.unloadingLocation || flowData.unloadingPin || '';
-              if (origin && destination) {
-                validCompletedOrders.push({
-                  user_id: cs.user_id,
-                  phone: cs.phone || flowData.phone || '',
-                  state: 'cta_menu',
-                  cargo_type: flowData.cargoType || 'Domestic',
-                  origin: origin,
-                  destination: destination,
-                  vehicle_or_container: flowData.vehicleSubType || flowData.vehicleType || 'Standard',
-                  material_or_line: flowData.shippingLine || flowData.material || '',
-                  weight: flowData.weight || '',
-                  loading_date: flowData.loadingDate || '',
-                  time_slot: flowData.loadingTime || '',
-                  company_name: flowData.company || '',
-                  contact_name: flowData.contactName || '',
-                  email: flowData.email || '',
-                  remarks: flowData.remarks || '',
-                  is_decision_maker: flowData.isDecisionMaker !== undefined ? flowData.isDecisionMaker : true,
-                  approver_name: flowData.approverName || '',
-                  approver_phone: flowData.approverPhone || '',
-                  approver_role: flowData.approverRole || '',
-                  alternate_phone: flowData.alternatePhone || '',
-                  flow_data: flowData,
-                  updated_at: cs.updated_at,
-                });
-                completedUserIds.add(cs.user_id);
-              }
-            }
+      for (const cs of completedSessions) {
+        if (!completedUserIds.has(cs.user_id)) {
+          const flowData = typeof cs.data === 'string' ? JSON.parse(cs.data || '{}') : cs.data || {};
+          const origin = flowData.loadingYard || flowData.stuffingAddress || flowData.loadingLocation || flowData.loadingPin || '';
+          const destination = flowData.unloadingAddress || flowData.portCfs || flowData.unloadingLocation || flowData.unloadingPin || '';
+          if (origin && destination) {
+            validCompletedOrders.push({
+              user_id: cs.user_id,
+              phone: cs.phone || flowData.phone || '',
+              state: 'cta_menu',
+              cargo_type: flowData.cargoType || 'Domestic',
+              origin: origin,
+              destination: destination,
+              vehicle_or_container: flowData.vehicleSubType || flowData.vehicleType || 'Standard',
+              material_or_line: flowData.shippingLine || flowData.material || '',
+              weight: flowData.weight || '',
+              loading_date: flowData.loadingDate || '',
+              time_slot: flowData.loadingTime || '',
+              company_name: flowData.company || '',
+              contact_name: flowData.contactName || '',
+              email: flowData.email || '',
+              remarks: flowData.remarks || '',
+              is_decision_maker: flowData.isDecisionMaker !== undefined ? flowData.isDecisionMaker : true,
+              approver_name: flowData.approverName || '',
+              approver_phone: flowData.approverPhone || '',
+              approver_role: flowData.approverRole || '',
+              alternate_phone: flowData.alternatePhone || '',
+              flow_data: flowData,
+              updated_at: cs.updated_at,
+            });
+            completedUserIds.add(cs.user_id);
           }
         }
-      } catch (mergeErr) {
-        console.warn('Could not check users_master for completed bookings:', mergeErr);
       }
 
       // Sort by updated_at descending
@@ -429,6 +449,11 @@ class SupabaseDataService {
     try {
       this.setLocalStatus(userId, newStatus, remarks);
 
+      if (authService.getStoredToken()) {
+        const res = await authService.updateBookingStatus(userId, newStatus, remarks, phone, name);
+        if (res.success) return true;
+      }
+
       const payload: Record<string, any> = {
         user_id: userId,
         status: newStatus,
@@ -457,17 +482,27 @@ class SupabaseDataService {
   // --- LIVE CONVERSATION SESSIONS (users_master) ---
   async getSessions(): Promise<SessionRecord[]> {
     try {
-      const { data, error } = await this.client
-        .from('users_master')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(150);
-
-      if (error || !data) {
-        return [];
+      let rawSessions: any[] = [];
+      if (authService.getStoredToken()) {
+        const authRes = await authService.getSessions();
+        if (authRes.success && authRes.sessions) {
+          rawSessions = authRes.sessions;
+        }
       }
 
-      return data.map((d: any) => ({
+      if (rawSessions.length === 0 && !authService.getStoredToken()) {
+        const { data, error } = await this.client
+          .from('users_master')
+          .select('*')
+          .order('updated_at', { ascending: false })
+          .limit(150);
+
+        if (!error && data) {
+          rawSessions = data;
+        }
+      }
+
+      return rawSessions.map((d: any) => ({
         user_id: d.user_id,
         phone: d.phone,
         state: d.state,
@@ -484,16 +519,26 @@ class SupabaseDataService {
   // --- SUPPORT TICKETS (support) ---
   async getSupportTickets(): Promise<SupportTicket[]> {
     try {
-      const { data, error } = await this.client
-        .from('support')
-        .select('*')
-        .order('updated_at', { ascending: false });
-
-      if (error || !data) {
-        return [];
+      let rawTickets: any[] = [];
+      if (authService.getStoredToken()) {
+        const authRes = await authService.getSupportTickets();
+        if (authRes.success && authRes.tickets) {
+          rawTickets = authRes.tickets;
+        }
       }
 
-      return data.map((d: any) => ({
+      if (rawTickets.length === 0 && !authService.getStoredToken()) {
+        const { data, error } = await this.client
+          .from('support')
+          .select('*')
+          .order('updated_at', { ascending: false });
+
+        if (!error && data) {
+          rawTickets = data;
+        }
+      }
+
+      return rawTickets.map((d: any) => ({
         user_id: d.user_id,
         phone: d.phone || '',
         contact_name: d.contact_name || '',
@@ -514,6 +559,10 @@ class SupabaseDataService {
     status: SupportTicket['status']
   ): Promise<boolean> {
     try {
+      if (authService.getStoredToken()) {
+        const res = await authService.updateSupportStatus(userId, status);
+        if (res.success) return true;
+      }
       const { error } = await this.client
         .from('support')
         .update({ status, updated_at: new Date().toISOString() })
@@ -723,15 +772,29 @@ class SupabaseDataService {
   async getAssignments(): Promise<Record<string, LeadAssignment>> {
     const local = this.getLocalAssignments();
     try {
-      const { data, error } = await this.client
-        .from('lead_status')
-        .select('user_id, assigned_to, assigned_at, transferred_from, transfer_note')
-        .not('assigned_to', 'is', null);
+      let rawAssignments: any[] = [];
+      if (authService.getStoredToken()) {
+        const authRes = await authService.getAssignments();
+        if (authRes.success && authRes.assignments) {
+          rawAssignments = authRes.assignments;
+        }
+      }
 
-      if (!error && Array.isArray(data)) {
+      if (rawAssignments.length === 0 && !authService.getStoredToken()) {
+        const { data, error } = await this.client
+          .from('lead_status')
+          .select('user_id, assigned_to, assigned_at, transferred_from, transfer_note')
+          .not('assigned_to', 'is', null);
+
+        if (!error && Array.isArray(data)) {
+          rawAssignments = data;
+        }
+      }
+
+      if (rawAssignments.length > 0) {
         // Database is the authoritative source of truth for active assignments
         const fresh: Record<string, LeadAssignment> = {};
-        for (const row of data as any[]) {
+        for (const row of rawAssignments) {
           if (row.user_id && row.assigned_to) {
             fresh[row.user_id] = {
               user_id: row.user_id,
@@ -769,6 +832,12 @@ class SupabaseDataService {
       assigned_at: new Date().toISOString(),
     };
     this.setLocalAssignment(userId, assignment);
+
+    if (authService.getStoredToken()) {
+      const res = await authService.assignLead(userId, employeeId);
+      if (res.success) return true;
+    }
+
     const { error } = await this.client.from('lead_status').upsert(
       { user_id: userId, assigned_to: employeeId, assigned_at: assignment.assigned_at },
       { onConflict: 'user_id' }
@@ -784,6 +853,12 @@ class SupabaseDataService {
     const all = this.getLocalAssignments();
     delete all[userId];
     localStorage.setItem('traket_assignments', JSON.stringify(all));
+
+    if (authService.getStoredToken()) {
+      const res = await authService.assignLead(userId, null, 'Manual Unassign');
+      if (res.success) return true;
+    }
+
     const { error } = await this.client.from('lead_status').upsert(
       { user_id: userId, assigned_to: null, assigned_at: null, transfer_note: 'Manual Unassign' },
       { onConflict: 'user_id' }
@@ -805,6 +880,12 @@ class SupabaseDataService {
       transfer_note: transferNote,
     };
     this.setLocalAssignment(userId, assignment);
+
+    if (authService.getStoredToken()) {
+      const res = await authService.assignLead(userId, newEmployeeId, transferNote, existing?.assigned_to);
+      if (res.success) return true;
+    }
+
     const { error } = await this.client.from('lead_status').upsert(
       {
         user_id: userId,

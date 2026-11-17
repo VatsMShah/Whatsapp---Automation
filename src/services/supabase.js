@@ -9,7 +9,7 @@ function getClient() {
   if (!supabase) {
     const rawUrl = config.supabase.url;
     const url = rawUrl ? rawUrl.replace(/\/rest\/v1\/?$/, '') : rawUrl;
-    const key = config.supabase.key;
+    const key = (config.supabase.serviceRoleKey || config.supabase.key || '').trim();
     if (!url || !key || url.startsWith('your_') || key.startsWith('your_')) {
       logger.error('Supabase credentials are not configured or are still placeholders. Please update .env.');
       throw new Error('Supabase credentials not configured');

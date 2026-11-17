@@ -1,3 +1,17 @@
+const dns = require('dns');
+// Prefer IPv4 DNS resolution to prevent macOS sleep/wake IPv6 ENOTFOUND lookup drops
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch (_) {}
+
+process.on('uncaughtException', (err) => {
+  console.error('[UNCAUGHT EXCEPTION]', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[UNHANDLED REJECTION]', reason);
+});
+
 const express = require('express');
 const config = require('./config');
 const logger = require('./utils/logger');

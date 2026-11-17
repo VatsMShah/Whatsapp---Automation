@@ -1,14 +1,21 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const DASHBOARD_URL = 'http://localhost:5174';
+async function fetchDashboard() {
+  try {
+    return await fetch('http://localhost:5173');
+  } catch {
+    return await fetch('http://localhost:5174');
+  }
+}
+
 const BACKEND_URL = 'http://localhost:3005';
 
 test('E2E Dashboard & Backend Server Live Integration Suite', async (t) => {
   let adminToken = '';
 
-  await t.test('1. Vite Dashboard Dev Server: Serves index.html on port 5174', async () => {
-    const res = await fetch(DASHBOARD_URL);
+  await t.test('1. Vite Dashboard Dev Server: Serves index.html on local dev port', async () => {
+    const res = await fetchDashboard();
     assert.strictEqual(res.status, 200, 'Vite dev server must respond with 200 OK');
     const html = await res.text();
     assert.ok(html.includes('<div id="root"></div>'), 'HTML must contain React root mounting point');
@@ -128,5 +135,73 @@ test('E2E Dashboard & Backend Server Live Integration Suite', async (t) => {
       body: JSON.stringify({ action: 'get_employees' }),
     });
     assert.strictEqual(res.status, 401, 'Unauthenticated get_employees must return 401');
+  });
+
+  await t.test('11. CRM Data: Fetches freight orders for authenticated Admin', async () => {
+    const res = await fetch(`${BACKEND_URL}/api/auth`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-traket-token': adminToken,
+      },
+      body: JSON.stringify({ action: 'get_bookings' }),
+    });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.ok(Array.isArray(data.bookings), 'Should return array of bookings');
+    assert.ok(data.bookings.length > 0, `Bookings should not be empty, got ${data.bookings.length}`);
+    assert.ok(Array.isArray(data.leadStatuses), 'Should return array of lead statuses');
+  });
+
+  await t.test('12. CRM Data: Fetches live conversation sessions for authenticated Admin', async () => {
+    const res = await fetch(`${BACKEND_URL}/api/auth`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-traket-token': adminToken,
+      },
+      body: JSON.stringify({ action: 'get_sessions' }),
+    });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.ok(Array.isArray(data.sessions), 'Should return array of sessions');
+    assert.ok(data.sessions.length > 0, `Sessions should not be empty, got ${data.sessions.length}`);
+  });
+
+  await t.test('13. CRM Data: Fetches support tickets and assignments for authenticated Admin', async () => {
+    const [resTickets, resAssignments] = await Promise.all([
+      fetch(`${BACKEND_URL}/api/auth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-traket-token': adminToken },
+        body: JSON.stringify({ action: 'get_support_tickets' }),
+      }),
+      fetch(`${BACKEND_URL}/api/auth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-traket-token': adminToken },
+        body: JSON.stringify({ action: 'get_assignments' }),
+      }),
+    ]);
+    assert.strictEqual(resTickets.status, 200);
+    assert.strictEqual(resAssignments.status, 200);
+    const dataTickets = await resTickets.json();
+    const dataAssignments = await resAssignments.json();
+    assert.strictEqual(dataTickets.success, true);
+    assert.strictEqual(dataAssignments.success, true);
+    assert.ok(Array.isArray(dataTickets.tickets), 'Should return tickets array');
+    assert.ok(Array.isArray(dataAssignments.assignments), 'Should return assignments array');
+  });
+
+  await t.test('14. Security Lockdown: Rejects unauthenticated CRM data access with 401', async () => {
+    const unauthActions = ['get_bookings', 'get_sessions', 'get_support_tickets', 'get_assignments'];
+    for (const action of unauthActions) {
+      const res = await fetch(`${BACKEND_URL}/api/auth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      assert.strictEqual(res.status, 401, `Unauthenticated ${action} must return 401`);
+    }
   });
 });

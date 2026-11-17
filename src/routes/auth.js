@@ -994,6 +994,235 @@ async function handleAuthRequest(req, res) {
       return res.json({ success: true });
     }
 
+    // 11. GET BOOKINGS (Authenticated)
+    if (action === 'get_bookings') {
+      const auth = await authenticateRequest(req, body, supabase);
+      if (!auth) {
+        return res.status(401).json({ error: 'Authentication required.' });
+      }
+
+      const [bookingsRes, statusRes, sessionsRes] = await Promise.all([
+        supabase
+          .from('book_vehicle')
+          .select('*')
+          .order('updated_at', { ascending: false }),
+        supabase
+          .from('lead_status')
+          .select('*'),
+        supabase
+          .from('users_master')
+          .select('*')
+          .eq('state', 'cta_menu')
+          .eq('flow_type', 'book')
+          .order('updated_at', { ascending: false })
+          .limit(50),
+      ]);
+
+      if (bookingsRes.error) {
+        return res.status(500).json({ error: bookingsRes.error.message });
+      }
+
+      let rawBookings = bookingsRes.data || [];
+      let leadStatuses = statusRes.data || [];
+      let completedSessions = sessionsRes.data || [];
+
+      // If logged in as employee, isolate leads assigned to them
+      if (auth.claims.role === 'employee') {
+        const empId = auth.claims.employee_id || auth.claims.sub;
+        const assignedUserIds = new Set(
+          leadStatuses
+            .filter((s) => s.assigned_to === empId)
+            .map((s) => s.user_id)
+        );
+        rawBookings = rawBookings.filter((b) => assignedUserIds.has(b.user_id));
+        completedSessions = completedSessions.filter((s) => assignedUserIds.has(s.user_id));
+        leadStatuses = leadStatuses.filter((s) => s.assigned_to === empId);
+      }
+
+      return res.json({
+        success: true,
+        bookings: rawBookings,
+        leadStatuses,
+        completedSessions,
+      });
+    }
+
+    // 12. GET SESSIONS (Authenticated)
+    if (action === 'get_sessions') {
+      const auth = await authenticateRequest(req, body, supabase);
+      if (!auth) {
+        return res.status(401).json({ error: 'Authentication required.' });
+      }
+
+      const { data, error } = await supabase
+        .from('users_master')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(150);
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.json({ success: true, sessions: data || [] });
+    }
+
+    // 13. GET SUPPORT TICKETS (Authenticated)
+    if (action === 'get_support_tickets') {
+      const auth = await authenticateRequest(req, body, supabase);
+      if (!auth) {
+        return res.status(401).json({ error: 'Authentication required.' });
+      }
+
+      const { data, error } = await supabase
+        .from('support')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.json({ success: true, tickets: data || [] });
+    }
+
+    // 14. GET ASSIGNMENTS (Authenticated)
+    if (action === 'get_assignments') {
+      const auth = await authenticateRequest(req, body, supabase);
+      if (!auth) {
+        return res.status(401).json({ error: 'Authentication required.' });
+      }
+
+      const { data, error } = await supabase
+        .from('lead_status')
+        .select('user_id, assigned_to, assigned_at, transferred_from, transfer_note')
+        .not('assigned_to', 'is', null);
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.json({ success: true, assignments: data || [] });
+    }
+
+    // 15. UPDATE BOOKING STATUS (Authenticated)
+    if (action === 'update_booking_status') {
+      const auth = await authenticateRequest(req, body, supabase);
+      if (!auth) {
+        return res.status(401).json({ error: 'Authentication required.' });
+      }
+
+      const { userId, status, remarks, phone, name } = body;
+      if (!userId) {
+        return res.status(400).json({ error: 'Missing userId.' });
+      }
+
+      const payload = {
+        user_id: userId,
+        status: status || 'new',
+        updated_at: new Date().toISOString(),
+      };
+      if (phone !== undefined) payload.phone = phone;
+      if (name !== undefined) payload.name = name;
+      if (remarks !== undefined) payload.remarks = remarks;
+
+      const { error } = await supabase
+        .from('lead_status')
+        .upsert(payload, { onConflict: 'user_id' });
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.json({ success: true });
+    }
+
+    // 16. UPDATE SUPPORT STATUS (Authenticated)
+    if (action === 'update_support_status') {
+      const auth = await authenticateRequest(req, body, supabase);
+      if (!auth) {
+        return res.status(401).json({ error: 'Authentication required.' });
+      }
+
+      const { userId, status } = body;
+      if (!userId) {
+        return res.status(400).json({ error: 'Missing userId.' });
+      }
+
+      const { error } = await supabase
+        .from('support')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('user_id', userId);
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.json({ success: true });
+    }
+
+    // 17. ASSIGN / TRANSFER / UNASSIGN LEAD (Authenticated)
+    if (action === 'assign_lead') {
+      const auth = await authenticateRequest(req, body, supabase);
+      if (!auth) {
+        return res.status(401).json({ error: 'Authentication required.' });
+      }
+
+      const { userId, employeeId, transferNote, transferredFrom } = body;
+      if (!userId) {
+        return res.status(400).json({ error: 'Missing userId.' });
+      }
+
+      const payload = {
+        user_id: userId,
+        assigned_to: employeeId || null,
+        assigned_at: employeeId ? new Date().toISOString() : null,
+      };
+      if (transferNote !== undefined) payload.transfer_note = transferNote;
+      if (transferredFrom !== undefined) payload.transferred_from = transferredFrom;
+
+      const { error } = await supabase
+        .from('lead_status')
+        .upsert(payload, { onConflict: 'user_id' });
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.json({ success: true });
+    }
+
+    // 18. BATCH ASSIGN LEADS (Authenticated Admin)
+    if (action === 'batch_assign_leads') {
+      const auth = await authenticateRequest(req, body, supabase);
+      if (!auth || auth.claims.role !== 'admin') {
+        return res.status(403).json({ error: 'Administrator privileges required.' });
+      }
+
+      const items = Array.isArray(body.assignments) ? body.assignments : [];
+      if (items.length === 0) {
+        return res.json({ success: true, count: 0 });
+      }
+
+      const payloads = items.map((item) => ({
+        user_id: item.user_id,
+        assigned_to: item.assigned_to || null,
+        assigned_at: item.assigned_at || new Date().toISOString(),
+        transfer_note: item.transfer_note || null,
+        transferred_from: item.transferred_from || null,
+      }));
+
+      const { error } = await supabase
+        .from('lead_status')
+        .upsert(payloads, { onConflict: 'user_id' });
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      return res.json({ success: true, count: items.length });
+    }
+
     return res.status(400).json({ error: `Unknown auth action: ${action}` });
   } catch (err) {
     logger.error('Local Auth route error:', err);

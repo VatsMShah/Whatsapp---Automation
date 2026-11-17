@@ -338,4 +338,94 @@ export const authService = {
     }
     return { success: true };
   },
+
+  async getBookings(): Promise<{
+    success: boolean;
+    bookings?: any[];
+    leadStatuses?: any[];
+    completedSessions?: any[];
+    error?: string;
+  }> {
+    const { data } = await callAuth<any>('get_bookings');
+    if (!data.success) {
+      return { success: false, error: data.error };
+    }
+    return {
+      success: true,
+      bookings: (data as any).bookings || [],
+      leadStatuses: (data as any).leadStatuses || [],
+      completedSessions: (data as any).completedSessions || [],
+    };
+  },
+
+  async getSessions(): Promise<{ success: boolean; sessions?: any[]; error?: string }> {
+    const { data } = await callAuth<any>('get_sessions');
+    if (!data.success) {
+      return { success: false, error: data.error };
+    }
+    return { success: true, sessions: (data as any).sessions || [] };
+  },
+
+  async getSupportTickets(): Promise<{ success: boolean; tickets?: any[]; error?: string }> {
+    const { data } = await callAuth<any>('get_support_tickets');
+    if (!data.success) {
+      return { success: false, error: data.error };
+    }
+    return { success: true, tickets: (data as any).tickets || [] };
+  },
+
+  async getAssignments(): Promise<{ success: boolean; assignments?: any[]; error?: string }> {
+    const { data } = await callAuth<any>('get_assignments');
+    if (!data.success) {
+      return { success: false, error: data.error };
+    }
+    return { success: true, assignments: (data as any).assignments || [] };
+  },
+
+  async updateBookingStatus(
+    userId: string,
+    status: string,
+    remarks?: string,
+    phone?: string,
+    name?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const { data } = await callAuth('update_booking_status', {
+      userId,
+      status,
+      remarks,
+      phone,
+      name,
+    });
+    return { success: Boolean(data.success), error: data.error };
+  },
+
+  async updateSupportStatus(
+    userId: string,
+    status: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const { data } = await callAuth('update_support_status', { userId, status });
+    return { success: Boolean(data.success), error: data.error };
+  },
+
+  async assignLead(
+    userId: string,
+    employeeId: string | null,
+    transferNote?: string,
+    transferredFrom?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const { data } = await callAuth('assign_lead', {
+      userId,
+      employeeId,
+      transferNote,
+      transferredFrom,
+    });
+    return { success: Boolean(data.success), error: data.error };
+  },
+
+  async batchAssignLeads(
+    assignments: Array<{ user_id: string; assigned_to: string | null; assigned_at?: string; transfer_note?: string; transferred_from?: string }>
+  ): Promise<{ success: boolean; error?: string }> {
+    const { data } = await callAuth('batch_assign_leads', { assignments });
+    return { success: Boolean(data.success), error: data.error };
+  },
 };

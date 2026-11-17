@@ -135,22 +135,26 @@ async function processAutoReminders() {
     }
 
     // Query recent completed bookings so we NEVER send abandoned reminders to customers who already converted
-    const { data: recentBookings } = await client
-      .from('book_vehicle')
-      .select('phone, updated_at')
-      .order('updated_at', { ascending: false })
-      .limit(100);
-
     const bookedPhoneMap = new Map();
-    (recentBookings || []).forEach((b) => {
-      const p = String(b.phone || '').replace(/[^0-9]/g, '').slice(-10);
-      if (p) {
-        const t = new Date(b.updated_at).getTime();
-        if (!bookedPhoneMap.has(p) || t > bookedPhoneMap.get(p)) {
-          bookedPhoneMap.set(p, t);
+    try {
+      const { data: recentBookings } = await client
+        .from('book_vehicle')
+        .select('phone, updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(100);
+
+      (recentBookings || []).forEach((b) => {
+        const p = String(b.phone || '').replace(/[^0-9]/g, '').slice(-10);
+        if (p) {
+          const t = new Date(b.updated_at).getTime();
+          if (!bookedPhoneMap.has(p) || t > bookedPhoneMap.get(p)) {
+            bookedPhoneMap.set(p, t);
+          }
         }
-      }
-    });
+      });
+    } catch (e) {
+      logger.warn('Could not query recent bookings for reminder deduplication', e?.message || e);
+    }
 
     const logs = loadReminderLogs();
     const now = Date.now();
