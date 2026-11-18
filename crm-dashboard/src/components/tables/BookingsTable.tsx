@@ -19,10 +19,13 @@ import {
   Sparkles,
   Check,
   AlertCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { FreightBooking, Employee, LeadAssignment } from '../../types';
 import { UserRole } from '../../context/RoleContext';
 import { categorizeVehicle } from '../../services/supabase';
+import { maskPhone, maskName, maskEmail } from '../../utils/masking';
 
 interface BookingsTableProps {
   bookings: FreightBooking[];
@@ -64,6 +67,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
   const [remarksError, setRemarksError] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [activeGlowId, setActiveGlowId] = useState<string | null>(null);
+  const [showPii, setShowPii] = useState(false);
 
   // Auto-select and scroll to highlighted booking when deep-linked
   React.useEffect(() => {
@@ -500,6 +504,32 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
               <option value="direct">✅ Direct Decision-Maker (Self)</option>
             </select>
           </div>
+
+          {/* Admin Eye Toggle Button to Reveal / Mask Sensitive PII */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setShowPii((prev) => !prev)}
+              className={`ml-auto flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition shadow-xs ${
+                showPii
+                  ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                  : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+              }`}
+              title={showPii ? 'Click to mask customer PII' : 'Click to reveal full phone numbers, names & emails'}
+            >
+              {showPii ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Hide PII</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Show PII</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -554,13 +584,21 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                     <tr
                       key={b.user_id}
                       id={`booking-row-${b.user_id}`}
-                      className={`transition duration-200 group ${
+                      onClick={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (target.closest('a, select, button, input, textarea, label')) {
+                          return;
+                        }
+                        openDetailsModal(b);
+                      }}
+                      className={`transition duration-200 group cursor-pointer ${
                         isHighlighted
                           ? 'bg-blue-100/70 ring-2 ring-blue-500 shadow-md font-medium'
                           : b.status === 'new'
-                          ? 'hover:bg-blue-50/50 bg-blue-50/15'
-                          : 'hover:bg-slate-50/80'
+                          ? 'hover:bg-blue-50/80 bg-blue-50/15'
+                          : 'hover:bg-slate-100/80'
                       }`}
+                      title="Click to view full lead ticket"
                     >
                       {/* 1. Date & Time */}
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
@@ -597,7 +635,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                           <div className="space-y-1">
                             <div className="flex items-center space-x-1">
                               <span className="font-extrabold text-slate-900 text-xs truncate max-w-[140px]">
-                                {b.approver_name || 'Approver'}
+                                {showPii ? (b.approver_name || 'Approver') : maskName(b.approver_name || 'Approver')}
                               </span>
                               <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
                                 👑 Approver
@@ -615,21 +653,21 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                                 className="hover:text-amber-700 hover:underline"
                                 title="Call Commercial Approver"
                               >
-                                {formatPhone(b.approver_phone || b.alternate_phone)}
+                                {showPii ? formatPhone(b.approver_phone || b.alternate_phone) : maskPhone(b.approver_phone || b.alternate_phone)}
                               </a>
                             </div>
                           </div>
                         ) : (
                           <div className="space-y-1">
                             <div className="font-bold text-slate-900 text-xs truncate max-w-[140px]">
-                              {b.contact_name || 'Inquiry Contact'}
+                              {showPii ? (b.contact_name || 'Inquiry Contact') : maskName(b.contact_name || 'Inquiry Contact')}
                             </div>
                             <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                               ✅ Direct Decision-Maker (Self)
                             </span>
                             <div className="flex items-center space-x-1 text-slate-700 font-mono text-[11px]">
                               <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
-                              <span>{formatPhone(b.phone)}</span>
+                              <span>{showPii ? formatPhone(b.phone) : maskPhone(b.phone)}</span>
                             </div>
                           </div>
                         )}
@@ -640,7 +678,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         {b.is_decision_maker === false || (Boolean(b.approver_phone) && b.approver_phone !== b.phone) ? (
                           <div className="space-y-1">
                             <div className="font-bold text-slate-800 text-xs truncate max-w-[130px]">
-                              {b.submitter_name || b.contact_name || 'Store Submitter'}
+                              {showPii ? (b.submitter_name || b.contact_name || 'Store Submitter') : maskName(b.submitter_name || b.contact_name || 'Store Submitter')}
                             </div>
                             <span className="inline-block px-1.5 py-0.2 rounded text-[9px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
                               👤 Operations Submitter
@@ -654,7 +692,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                                 className="hover:text-blue-600"
                                 title="Chat on WhatsApp with Submitter"
                               >
-                                {formatPhone(b.submitter_phone || b.phone)}
+                                {showPii ? formatPhone(b.submitter_phone || b.phone) : maskPhone(b.submitter_phone || b.phone)}
                               </a>
                             </div>
                           </div>
@@ -677,7 +715,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                               className="font-mono text-xs font-bold text-slate-900 hover:text-blue-600 hover:underline"
                               title="Call Primary Phone"
                             >
-                              {formatPhone(b.phone)}
+                              {showPii ? formatPhone(b.phone) : maskPhone(b.phone)}
                             </a>
                             <a
                               href={getWhatsAppUrl(b.phone)}
@@ -700,7 +738,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                                 className="font-mono text-[11px] font-medium text-slate-700 hover:text-blue-600 hover:underline"
                                 title="Call Alternate Phone"
                               >
-                                {formatPhone(b.alternate_phone || b.approver_phone)}
+                                {showPii ? formatPhone(b.alternate_phone || b.approver_phone) : maskPhone(b.alternate_phone || b.approver_phone)}
                               </a>
                               <a
                                 href={getWhatsAppUrl(b.alternate_phone || b.approver_phone)}
@@ -916,12 +954,29 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                 <Package className="w-5 h-5 text-blue-600" />
                 <h3 className="text-base font-bold text-slate-900">Freight Order {extractShortId(selectedBooking.user_id)}</h3>
               </div>
-              <button
-                onClick={() => setSelectedBooking(null)}
-                className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center space-x-2">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPii((prev) => !prev)}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition ${
+                      showPii
+                        ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                        : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                    }`}
+                    title={showPii ? 'Click to mask PII' : 'Click to reveal full phone, email & name'}
+                  >
+                    {showPii ? <EyeOff className="w-3.5 h-3.5 text-amber-600" /> : <Eye className="w-3.5 h-3.5 text-slate-500" />}
+                    <span>{showPii ? 'Hide PII' : 'Show PII'}</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedBooking(null)}
+                  className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Route & Cargo Header */}
@@ -1007,7 +1062,9 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                   </div>
                   <div>
                     <div className="font-extrabold text-sm text-slate-900">
-                      {selectedBooking.approver_name || selectedBooking.contact_name || 'Primary Approver'}
+                      {showPii
+                        ? (selectedBooking.approver_name || selectedBooking.contact_name || 'Primary Approver')
+                        : maskName(selectedBooking.approver_name || selectedBooking.contact_name || 'Primary Approver')}
                     </div>
                     {selectedBooking.approver_role && (
                       <div className="text-[11px] font-semibold text-amber-700 mt-0.5">
@@ -1022,7 +1079,9 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-amber-200/60">
                     <span className="font-mono text-xs font-bold text-slate-900">
-                      {formatPhone(selectedBooking.approver_phone || selectedBooking.alternate_phone || selectedBooking.phone)}
+                      {showPii
+                        ? formatPhone(selectedBooking.approver_phone || selectedBooking.alternate_phone || selectedBooking.phone)
+                        : maskPhone(selectedBooking.approver_phone || selectedBooking.alternate_phone || selectedBooking.phone)}
                     </span>
                     <a
                       href={`tel:${(selectedBooking.approver_phone || selectedBooking.alternate_phone || selectedBooking.phone).replace(/\D/g, '')}`}
@@ -1045,20 +1104,24 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                   </div>
                   <div>
                     <div className="font-bold text-sm text-slate-900">
-                      {selectedBooking.submitter_name || selectedBooking.contact_name || 'Inquiry Contact'}
+                      {showPii
+                        ? (selectedBooking.submitter_name || selectedBooking.contact_name || 'Inquiry Contact')
+                        : maskName(selectedBooking.submitter_name || selectedBooking.contact_name || 'Inquiry Contact')}
                     </div>
                     <div className="text-[10px] text-slate-500 mt-0.5">
                       Operational Contact on WhatsApp
                     </div>
                     {selectedBooking.email && (
                       <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                        ✉️ {selectedBooking.email}
+                        ✉️ {showPii ? selectedBooking.email : maskEmail(selectedBooking.email)}
                       </div>
                     )}
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-slate-200">
                     <span className="font-mono text-xs text-slate-700">
-                      {formatPhone(selectedBooking.submitter_phone || selectedBooking.phone)}
+                      {showPii
+                        ? formatPhone(selectedBooking.submitter_phone || selectedBooking.phone)
+                        : maskPhone(selectedBooking.submitter_phone || selectedBooking.phone)}
                     </span>
                     <a
                       href={getWhatsAppUrl(selectedBooking.submitter_phone || selectedBooking.phone)}
@@ -1091,7 +1154,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                     </span>
                     <div className="flex items-center justify-between">
                       <span className="font-mono font-bold text-slate-900 text-xs">
-                        {formatPhone(selectedBooking.phone)}
+                        {showPii ? formatPhone(selectedBooking.phone) : maskPhone(selectedBooking.phone)}
                       </span>
                       <div className="flex items-center space-x-1">
                         <a
@@ -1120,7 +1183,9 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                     {selectedBooking.alternate_phone || (selectedBooking.approver_phone && selectedBooking.approver_phone !== selectedBooking.phone) ? (
                       <div className="flex items-center justify-between">
                         <span className="font-mono font-bold text-slate-900 text-xs">
-                          {formatPhone(selectedBooking.alternate_phone || selectedBooking.approver_phone)}
+                          {showPii
+                            ? formatPhone(selectedBooking.alternate_phone || selectedBooking.approver_phone)
+                            : maskPhone(selectedBooking.alternate_phone || selectedBooking.approver_phone)}
                         </span>
                         <div className="flex items-center space-x-1">
                           <a

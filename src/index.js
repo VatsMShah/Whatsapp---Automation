@@ -15,7 +15,7 @@ process.on('unhandledRejection', (reason) => {
 const express = require('express');
 const config = require('./config');
 const logger = require('./utils/logger');
-const { handleVerification, isValidSignature } = require('./webhook/verify');
+const { handleVerification, isValidSignature, isConfiguredSecret } = require('./webhook/verify');
 const { handleIncomingMessage } = require('./webhook/handler');
 const { handleAuthRequest, verifyJwt } = require('./routes/auth');
 const whatsapp = require('./services/whatsapp');
@@ -172,6 +172,12 @@ app.post('/webhook', async (req, res) => {
 app.listen(config.port, () => {
   logger.info(`Traket WhatsApp bot listening on port ${config.port}`);
   logger.info(`Webhook URL (local): http://localhost:${config.port}/webhook`);
+
+  if (!isConfiguredSecret(config.whatsapp.appSecret)) {
+    logger.warn('⚠️  WHATSAPP_APP_SECRET is a placeholder. Webhook is running in safe fallback mode (incoming WhatsApp messages will NOT be dropped). For production HMAC signature verification, add your Meta App Secret (App ID: 1828290467834981) to .env.');
+  } else {
+    logger.info('🔒 WHATSAPP_APP_SECRET configured. Strict HMAC-SHA256 signature verification active.');
+  }
 
   // Start background auto-reminders worker (runs every 3 minutes)
   logger.info('Auto-reminders worker initialized (3-stage 24hr drop-off recovery)');

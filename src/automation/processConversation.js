@@ -722,7 +722,7 @@ function processConversation(waMessagePayload, masterRows) {
   // ================= OUTPUT =================
   const output = { ...row };
 
-  output.user_id = row.user_id;
+  output.user_id = row.user_id || `${phone}_${Date.now()}`;
 
   if (message === 'cta_new') {
     output.user_id = `${phone}_${Date.now()}`;

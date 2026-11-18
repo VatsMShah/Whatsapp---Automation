@@ -9,7 +9,7 @@ async function fetchDashboard() {
   }
 }
 
-const BACKEND_URL = 'http://localhost:3005';
+const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
 
 test('E2E Dashboard & Backend Server Live Integration Suite', async (t) => {
   let adminToken = '';

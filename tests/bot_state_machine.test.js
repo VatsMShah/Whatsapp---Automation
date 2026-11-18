@@ -92,4 +92,17 @@ test('WhatsApp Bot State Machine Test Suite', async (t) => {
     };
     assert.doesNotThrow(() => processConversation(payload, dummyMaster));
   });
+
+  await t.test('New User Non-Greeting: Generates valid non-null user_id for new contacts', () => {
+    const payload = {
+      messages: [{
+        from: '919123456789',
+        type: 'text',
+        text: { body: 'Random first message' }
+      }]
+    };
+    const res = processConversation(payload, []);
+    assert.ok(res.user_id, 'user_id must never be null or undefined');
+    assert.ok(res.user_id.startsWith('919123456789_'), 'user_id should start with phone number');
+  });
 });
