@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Package,
   Calendar,
@@ -945,9 +946,15 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
       </div>
 
       {/* Slide-over / Modal for Order Details */}
-      {selectedBooking && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-xl relative text-slate-800">
+      {selectedBooking &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setSelectedBooking(null);
+            }}
+          >
+            <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-2xl relative text-slate-800 animate-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div className="flex items-center space-x-2">
@@ -1263,13 +1270,20 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Transfer Lead Modal */}
-      {transferBooking && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+      {transferBooking &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setTransferBooking(null);
+            }}
+          >
+            <div className="bg-white border border-slate-200 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-slate-900 flex items-center space-x-2">
                 <ArrowRightLeft className="w-5 h-5 text-blue-600" />
@@ -1356,7 +1370,8 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
