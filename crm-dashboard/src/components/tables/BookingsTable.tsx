@@ -427,47 +427,89 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Filters & Control Bar */}
-      <div className="p-4 rounded-xl bg-white border border-slate-200 flex flex-wrap items-center justify-between gap-3 shadow-sm">
-        {/* Status Filters */}
-        <div className="flex items-center space-x-1.5 overflow-x-auto text-xs">
-          {[
-            { id: 'all', label: isAdmin ? 'All Orders' : 'My Leads', count: scopedBookings.length },
-            { id: 'new', label: 'New Leads', count: scopedBookings.filter((b) => b.status === 'new').length },
-            { id: 'quoted', label: 'Quoted', count: scopedBookings.filter((b) => b.status === 'quoted').length },
-            { id: 'confirmed', label: 'Confirmed', count: scopedBookings.filter((b) => b.status === 'confirmed').length },
-            { id: 'completed', label: 'Completed', count: scopedBookings.filter((b) => b.status === 'completed').length },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusFilter(tab.id)}
-              className={`px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-1.5 ${
-                statusFilter === tab.id
-                  ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                  : 'bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200'
-              }`}
-            >
-              <span>{tab.label}</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                  statusFilter === tab.id ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+      {/* UNIFIED COMMAND & FILTER MATRIX */}
+      <div className="p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-3">
+        {/* Top Row: Segmented Status Controls + PII & Count */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Segmented Status Tabs */}
+          <div className="inline-flex bg-slate-100/80 p-1 rounded-xl border border-slate-200/60 overflow-x-auto">
+            {[
+              { id: 'all', label: isAdmin ? 'All Orders' : 'My Leads', count: scopedBookings.length },
+              { id: 'new', label: 'New Leads', count: scopedBookings.filter((b) => b.status === 'new').length },
+              { id: 'quoted', label: 'Quoted', count: scopedBookings.filter((b) => b.status === 'quoted').length },
+              { id: 'confirmed', label: 'Confirmed', count: scopedBookings.filter((b) => b.status === 'confirmed').length },
+              { id: 'completed', label: 'Completed', count: scopedBookings.filter((b) => b.status === 'completed').length },
+            ].map((tab) => {
+              const isActive = statusFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setStatusFilter(tab.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs transition-all flex items-center space-x-1.5 cursor-pointer whitespace-nowrap ${
+                    isActive
+                      ? 'bg-white text-blue-700 shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900 font-medium'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      isActive
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-slate-200/80 text-slate-600'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Stats & PII Toggle */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-medium text-slate-500">
+              Showing <span className="font-bold text-slate-800 font-mono">{filtered.length}</span> orders
+            </span>
+
+            {/* Admin Eye Toggle Button to Reveal / Mask Sensitive PII */}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowPii((prev) => !prev)}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition shadow-2xs cursor-pointer ${
+                  showPii
+                    ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
+                title={showPii ? 'Click to mask customer PII' : 'Click to reveal full phone numbers, names & emails'}
               >
-                {tab.count}
-              </span>
-            </button>
-          ))}
+                {showPii ? (
+                  <>
+                    <EyeOff className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Hide PII</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Show PII</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center space-x-2 flex-wrap gap-2">
+        {/* Bottom Row: Faceted Filter Selectors */}
+        <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-slate-100">
           {/* Employee filter (admin only) */}
           {isAdmin && employees.length > 0 && (
-            <div className="flex items-center space-x-2 text-xs">
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-2.5 py-1 text-xs text-slate-700">
               <Users className="w-3.5 h-3.5 text-slate-400" />
               <select
                 value={employeeFilter}
                 onChange={(e) => setEmployeeFilter(e.target.value)}
-                className="bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white"
+                className="bg-transparent border-none text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
               >
                 <option value="all">All Employees</option>
                 <option value="unassigned">Unassigned</option>
@@ -479,12 +521,12 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
           )}
 
           {/* Cargo Type Filter */}
-          <div className="flex items-center space-x-2 text-xs">
-            <span className="text-slate-500 font-medium">Cargo:</span>
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-2.5 py-1 text-xs text-slate-700">
+            <span className="text-slate-400 font-medium">Cargo:</span>
             <select
               value={cargoFilter}
               onChange={(e) => setCargoFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white"
+              className="bg-transparent border-none text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
             >
               <option value="all">All Cargo Types</option>
               <option value="domestic">Domestic</option>
@@ -493,53 +535,27 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
           </div>
 
           {/* Commercial Approver / Authority Filter */}
-          <div className="flex items-center space-x-2 text-xs">
-            <span className="text-slate-500 font-medium">Authority:</span>
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-2.5 py-1 text-xs text-slate-700">
+            <span className="text-slate-400 font-medium">Authority:</span>
             <select
               value={approverFilter}
               onChange={(e) => setApproverFilter(e.target.value as any)}
-              className="bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 focus:bg-white"
+              className="bg-transparent border-none text-xs font-semibold text-slate-700 focus:outline-none cursor-pointer"
             >
               <option value="all">All Authority Types</option>
               <option value="corporate">👑 Corporate (Has Separate Approver)</option>
               <option value="direct">✅ Direct Decision-Maker (Self)</option>
             </select>
           </div>
-
-          {/* Admin Eye Toggle Button to Reveal / Mask Sensitive PII */}
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => setShowPii((prev) => !prev)}
-              className={`ml-auto flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition shadow-xs ${
-                showPii
-                  ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
-                  : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-              }`}
-              title={showPii ? 'Click to mask customer PII' : 'Click to reveal full phone numbers, names & emails'}
-            >
-              {showPii ? (
-                <>
-                  <EyeOff className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Hide PII</span>
-                </>
-              ) : (
-                <>
-                  <Eye className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Show PII</span>
-                </>
-              )}
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Orders Table */}
-      <div className="rounded-xl bg-white border border-slate-200 overflow-hidden shadow-sm">
+      {/* NEXT-GEN ORDERS TABLE CONTAINER */}
+      <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider text-[10px]">
+              <tr className="bg-slate-50/90 text-slate-500 border-b border-slate-200/80 font-bold uppercase tracking-wider text-[10px] select-none">
                 <th className="py-3 px-3.5 whitespace-nowrap">
                   <div className="flex items-center space-x-1">
                     <Clock className="w-3.5 h-3.5 text-slate-400" />
@@ -547,9 +563,9 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                   </div>
                 </th>
                 <th className="py-3 px-3.5 whitespace-nowrap">User ID</th>
-                <th className="py-3 px-3.5 whitespace-nowrap">Commercial Approver (Decision-Maker)</th>
-                <th className="py-3 px-3.5 whitespace-nowrap">Lead Submitter (Operations)</th>
-                <th className="py-3 px-3.5 whitespace-nowrap">Phone & Alternate Phone</th>
+                <th className="py-3 px-3.5 whitespace-nowrap">Commercial Approver</th>
+                <th className="py-3 px-3.5 whitespace-nowrap">Lead Submitter (Ops)</th>
+                <th className="py-3 px-3.5 whitespace-nowrap">Phone & WhatsApp</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">Route (Locations)</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">PIN to PIN</th>
                 <th className="py-3 px-3.5 whitespace-nowrap">Cargo & Vehicle Specs</th>
@@ -564,11 +580,13 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {sortedBookings.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="py-12 text-center text-slate-500">
+                  <td colSpan={14} className="py-14 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center space-y-2">
-                      <Package className="w-8 h-8 text-slate-400" />
-                      <p className="font-semibold text-slate-700">No freight orders found</p>
-                      <p className="text-[11px] text-slate-500">
+                      <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center">
+                        <Package className="w-5 h-5" />
+                      </div>
+                      <p className="font-bold text-slate-800 text-sm">No freight orders found</p>
+                      <p className="text-xs text-slate-400">
                         Orders captured by your WhatsApp bot will automatically appear here.
                       </p>
                     </div>
@@ -592,21 +610,19 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         }
                         openDetailsModal(b);
                       }}
-                      className={`transition duration-200 group cursor-pointer ${
+                      className={`transition duration-150 group cursor-pointer ${
                         isHighlighted
                           ? 'bg-blue-100/70 ring-2 ring-blue-500 shadow-md font-medium'
                           : b.status === 'new'
-                          ? 'hover:bg-blue-50/80 bg-blue-50/15'
-                          : 'hover:bg-slate-100/80'
+                          ? 'hover:bg-blue-50/50 bg-blue-50/15'
+                          : 'hover:bg-slate-50/80'
                       }`}
                       title="Click to view full lead ticket"
                     >
                       {/* 1. Date & Time */}
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
                         <div className="flex items-start space-x-2">
-                          <div className="p-1 rounded bg-slate-100 text-slate-500 mt-0.5 shrink-0">
-                            <Clock className="w-3.5 h-3.5" />
-                          </div>
+                          <div className="w-2 h-2 rounded-full bg-blue-500 group-hover:scale-125 transition-transform mt-1.5 shrink-0" />
                           <div>
                             <div className="font-bold text-slate-900 text-xs flex items-center space-x-1.5">
                               <span>{dtInfo.formattedDate}</span>
@@ -616,25 +632,26 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] font-medium text-slate-500 font-mono mt-0.5">
+                            <div className="text-[11px] font-medium text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+                              <Clock className="w-3 h-3 text-slate-400" />
                               {dtInfo.formattedTime}
                             </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* 2. User ID (Clean without hashtag) */}
+                      {/* 2. User ID */}
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
-                        <span className="font-mono text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/80 inline-block">
-                          {shortId}
+                        <span className="font-mono text-[11px] font-bold text-blue-700 bg-blue-50/90 px-2 py-0.5 rounded-md border border-blue-200/80 inline-block shadow-2xs">
+                          #{shortId}
                         </span>
                       </td>
 
-                      {/* 2. Commercial Approver (Decision-Maker) */}
+                      {/* 3. Commercial Approver (Decision-Maker) */}
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
                         {b.is_decision_maker === false || (Boolean(b.approver_phone) && b.approver_phone !== b.phone) ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-1">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center space-x-1.5">
                               <span className="font-extrabold text-slate-900 text-xs truncate max-w-[140px]">
                                 {showPii ? (b.approver_name || 'Approver') : maskName(b.approver_name || 'Approver')}
                               </span>
@@ -659,12 +676,12 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                             </div>
                           </div>
                         ) : (
-                          <div className="space-y-1">
+                          <div className="space-y-0.5">
                             <div className="font-bold text-slate-900 text-xs truncate max-w-[140px]">
                               {showPii ? (b.contact_name || 'Inquiry Contact') : maskName(b.contact_name || 'Inquiry Contact')}
                             </div>
                             <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              ✅ Direct Decision-Maker (Self)
+                              ✅ Decision Maker (Self)
                             </span>
                             <div className="flex items-center space-x-1 text-slate-700 font-mono text-[11px]">
                               <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
@@ -674,10 +691,10 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         )}
                       </td>
 
-                      {/* 3. Lead Submitter (Operations / Store) */}
+                      {/* 4. Lead Submitter (Operations / Store) */}
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
                         {b.is_decision_maker === false || (Boolean(b.approver_phone) && b.approver_phone !== b.phone) ? (
-                          <div className="space-y-1">
+                          <div className="space-y-0.5">
                             <div className="font-bold text-slate-800 text-xs truncate max-w-[130px]">
                               {showPii ? (b.submitter_name || b.contact_name || 'Store Submitter') : maskName(b.submitter_name || b.contact_name || 'Store Submitter')}
                             </div>
@@ -704,9 +721,9 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         )}
                       </td>
 
-                      {/* 4. Phone Number & Alternate Phone Number */}
-                      <td className="py-3.5 px-3.5 whitespace-nowrap">
-                        <div className="space-y-1.5">
+                      {/* 5. Phone Number & WhatsApp Trigger */}
+                      <td className="py-3.5 px-3.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="space-y-1">
                           {/* Primary Phone */}
                           <div className="flex items-center space-x-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" title="Primary WhatsApp Contact" />
@@ -722,10 +739,10 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                               href={getWhatsAppUrl(b.phone)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-[9px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-1.5 py-0.2 rounded border border-emerald-200 transition"
+                              className="inline-flex items-center gap-1 text-[9px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-2 py-0.5 rounded-md shadow-2xs transition"
                               title="Chat on WhatsApp"
                             >
-                              WA
+                              <span>WA</span>
                             </a>
                           </div>
 
@@ -745,7 +762,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                                 href={getWhatsAppUrl(b.alternate_phone || b.approver_phone)}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-[9px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-1 py-0.2 rounded border border-emerald-200 transition"
+                                className="text-[9px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-1.5 py-0.2 rounded shadow-2xs transition"
                                 title="Chat on WhatsApp (Alternate)"
                               >
                                 WA
@@ -761,29 +778,29 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         </div>
                       </td>
 
-                      {/* 5. Route (Locations from where to where) */}
+                      {/* 6. Route (Locations) */}
                       <td className="py-3.5 px-3.5">
-                        <div className="flex items-center space-x-1.5 text-slate-900 font-bold text-xs">
+                        <div className="inline-flex items-center gap-1.5 bg-slate-100/80 border border-slate-200/80 rounded-xl px-2.5 py-1 text-xs">
                           <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                          <span className="truncate max-w-[130px]" title={b.originCity || b.origin}>
+                          <span className="font-bold text-slate-900 truncate max-w-[110px]" title={b.originCity || b.origin}>
                             {b.originCity || b.origin || 'Origin'}
                           </span>
-                          <span className="text-slate-400 font-normal">➔</span>
-                          <span className="truncate max-w-[130px]" title={b.destinationCity || b.destination}>
+                          <span className="text-blue-600 font-bold">➔</span>
+                          <span className="font-bold text-slate-700 truncate max-w-[110px]" title={b.destinationCity || b.destination}>
                             {b.destinationCity || b.destination || 'Destination'}
                           </span>
                         </div>
                       </td>
 
-                      {/* 6. PIN to PIN (421201 --> 700001) */}
+                      {/* 7. PIN to PIN */}
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
                         <div className="space-y-0.5">
                           <div className="text-[11px] font-mono text-slate-800 font-medium flex items-center space-x-1">
-                            <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                            <span className="bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
                               {b.origin || '—'}
                             </span>
                             <span className="text-slate-400">➔</span>
-                            <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                            <span className="bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
                               {b.destination || '—'}
                             </span>
                           </div>
@@ -795,7 +812,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         </div>
                       </td>
 
-                      {/* 7. Cargo & Vehicle Specs (Material removed from here) */}
+                      {/* 8. Cargo & Vehicle Specs */}
                       <td className="py-3.5 px-3.5">
                         <div className="space-y-1">
                           <div className="flex items-center space-x-1.5">
@@ -817,7 +834,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         </div>
                       </td>
 
-                      {/* 8. Material / Goods Description (Dedicated Column) */}
+                      {/* 9. Material / Goods */}
                       <td className="py-3.5 px-3.5">
                         {b.material_or_line ? (
                           <div className="flex items-center space-x-1 text-slate-800 font-medium text-xs">
@@ -831,7 +848,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         )}
                       </td>
 
-                      {/* 9. Loading Schedule */}
+                      {/* 10. Loading Schedule */}
                       <td className="py-3.5 px-3.5 whitespace-nowrap">
                         <div className="space-y-0.5">
                           <div className="flex items-center space-x-1 text-slate-800 font-medium text-[11px]">
@@ -849,7 +866,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         </div>
                       </td>
 
-                      {/* 10. Company Name (Dedicated Column before Status) */}
+                      {/* 11. Company Name */}
                       <td className="py-3.5 px-3.5">
                         {b.company_name ? (
                           <div className="font-semibold text-slate-900 truncate max-w-[130px]" title={b.company_name}>
@@ -860,9 +877,9 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         )}
                       </td>
 
-                      {/* 11. Assigned To (Admin only) */}
+                      {/* 12. Assigned To (Admin only) */}
                       {isAdmin && (
-                        <td className="py-3.5 px-3.5 whitespace-nowrap">
+                        <td className="py-3.5 px-3.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                           {(() => {
                             const assignedEmp = getAssignedEmployee(b.user_id);
                             const a = assignments[b.user_id];
@@ -892,7 +909,7 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                                 {assignedEmp && (
                                   <button
                                     onClick={() => openTransferModal(b)}
-                                    className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold flex items-center space-x-0.5"
+                                    className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold flex items-center space-x-0.5 cursor-pointer"
                                   >
                                     <ArrowRightLeft className="w-3 h-3" />
                                     <span>Transfer</span>
@@ -907,8 +924,8 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         </td>
                       )}
 
-                      {/* 12. Status Selector */}
-                      <td className="py-3.5 px-3.5 whitespace-nowrap">
+                      {/* 13. Status Selector */}
+                      <td className="py-3.5 px-3.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <select
                           value={b.status}
                           disabled={updatingStatusId === b.user_id}
@@ -926,14 +943,14 @@ export const BookingsTable: React.FC<BookingsTableProps> = ({
                         </select>
                       </td>
 
-                      {/* 13. Details Modal Trigger */}
-                      <td className="py-3.5 px-3.5 text-right whitespace-nowrap">
+                      {/* 14. Details Modal Trigger */}
+                      <td className="py-3.5 px-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => openDetailsModal(b)}
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 border border-slate-200 text-[11px] font-medium transition inline-flex items-center space-x-1"
+                          className="px-2.5 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-blue-700 border border-slate-200 text-[11px] font-semibold transition inline-flex items-center space-x-1 shadow-2xs cursor-pointer"
                         >
                           <span>View</span>
-                          <ChevronRight className="w-3 h-3 text-slate-500" />
+                          <ChevronRight className="w-3 h-3 text-slate-400" />
                         </button>
                       </td>
                     </tr>

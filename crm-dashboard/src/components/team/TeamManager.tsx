@@ -1207,7 +1207,7 @@ Portal URL    : ${window.location.origin}`;
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-5">
             {filteredEmployees.map((emp) => {
               const totalLeads = leadsPerEmployee(emp.employee_id);
               const activeLeads = activeLeadsPerEmployee(emp.employee_id);
@@ -1219,13 +1219,13 @@ Portal URL    : ${window.location.origin}`;
               return (
                 <div
                   key={emp.employee_id}
-                  className="bg-white border border-slate-200/90 rounded-2xl p-4.5 shadow-2xs hover:shadow-md transition-all space-y-3 flex flex-col justify-between"
+                  className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all duration-150 space-y-4 flex flex-col justify-between overflow-hidden relative"
                 >
-                  <div>
+                  <div className="space-y-3.5">
                     {/* Card Header */}
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-extrabold text-sm shadow-xs shrink-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center space-x-3.5 min-w-0 flex-1">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-extrabold text-sm shadow-xs shrink-0">
                           {emp.name
                             .split(' ')
                             .map((n) => n[0])
@@ -1233,14 +1233,16 @@ Portal URL    : ${window.location.origin}`;
                             .toUpperCase()
                             .slice(0, 2)}
                         </div>
-                        <div>
-                          <div className="font-extrabold text-slate-900 text-sm tracking-tight">{formattedName}</div>
-                          <div className="flex items-center space-x-2 mt-1">
-                            <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-extrabold text-slate-900 text-base tracking-tight truncate" title={formattedName}>
+                            {formattedName}
+                          </div>
+                          <div className="flex items-center space-x-2 mt-1 flex-wrap gap-y-1">
+                            <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md shrink-0">
                               {emp.employee_id}
                             </span>
                             <span
-                              className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                              className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
                                 emp.role === 'admin'
                                   ? 'bg-purple-100 text-purple-700 border border-purple-200'
                                   : 'bg-slate-100 text-slate-700 border border-slate-200'
@@ -1248,15 +1250,18 @@ Portal URL    : ${window.location.origin}`;
                             >
                               {emp.role === 'admin' ? 'Admin' : 'Specialist'}
                             </span>
+                            <span className="text-[10px] font-semibold text-slate-500 bg-slate-50 border border-slate-200/80 px-2 py-0.5 rounded-md truncate max-w-[120px]">
+                              {emp.department || 'Operations'}
+                            </span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-1">
+                      <div className="flex items-center space-x-1 shrink-0">
                         <button
                           type="button"
                           onClick={() => openEditForm(emp)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                          className="p-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-100 transition cursor-pointer"
                           title="Edit profile & vehicle routing"
                         >
                           <Edit2 className="w-4 h-4" />
@@ -1264,7 +1269,7 @@ Portal URL    : ${window.location.origin}`;
                         <button
                           type="button"
                           onClick={() => setConfirmDeactivate(emp.employee_id)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                          className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 transition cursor-pointer"
                           title="Deactivate specialist"
                         >
                           <UserX className="w-4 h-4" />
@@ -1272,24 +1277,24 @@ Portal URL    : ${window.location.origin}`;
                       </div>
                     </div>
 
-                    {/* Contact Info */}
-                    <div className="space-y-1.5 text-xs text-slate-600 pt-3 border-t border-slate-100 mt-3">
-                      <div className="flex items-center space-x-2 truncate">
+                    {/* Contact Info (Spacious 2-column grid with truncation) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 pt-3 border-t border-slate-100">
+                      <div className="flex items-center space-x-2 min-w-0 bg-slate-50/80 p-2 rounded-xl border border-slate-100">
                         <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate">{emp.email || <span className="italic text-slate-400">No email set</span>}</span>
+                        <span className="truncate font-medium text-slate-700" title={emp.email || ''}>
+                          {emp.email || <span className="italic text-slate-400">No email set</span>}
+                        </span>
                       </div>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 min-w-0 bg-slate-50/80 p-2 rounded-xl border border-slate-100">
                         <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="font-mono">{emp.phone || <span className="italic text-slate-400">No phone set</span>}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Briefcase className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="font-medium text-slate-700">{emp.department || 'Operations'}</span>
+                        <span className="font-mono font-medium text-slate-700 truncate" title={emp.phone || ''}>
+                          {emp.phone || <span className="italic text-slate-400">No phone set</span>}
+                        </span>
                       </div>
                     </div>
 
                     {/* Assigned Vehicles & Specializations */}
-                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+                    <div className="pt-3 border-t border-slate-100 space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="font-bold text-slate-700 flex items-center space-x-1.5">
                           <Truck className="w-3.5 h-3.5 text-blue-600" />
@@ -1300,7 +1305,7 @@ Portal URL    : ${window.location.origin}`;
                         </span>
                       </div>
 
-                      <div className="space-y-1.5">
+                      <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                         {vehicles.length > 0 ? (
                           vehicles.map((v) => {
                             const info = TRAKET_VEHICLES.find((tv) => tv.id === v);
@@ -1312,28 +1317,28 @@ Portal URL    : ${window.location.origin}`;
                             );
 
                             return (
-                              <div key={v} className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                              <div key={v} className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/80 text-xs space-y-1.5">
                                 <div className="flex items-center justify-between font-bold text-slate-800">
-                                  <span className="flex items-center space-x-1.5 text-xs">
-                                    <span>{info?.icon || '🚛'}</span>
-                                    <span>{v}</span>
+                                  <span className="flex items-center space-x-1.5 text-xs truncate">
+                                    <span className="text-base leading-none">{info?.icon || '🚛'}</span>
+                                    <span className="truncate">{v}</span>
                                   </span>
                                   {selectedSubs.length === 0 ? (
-                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md shrink-0">
                                       All Capacities
                                     </span>
                                   ) : (
-                                    <span className="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-md">
-                                      {selectedSubs.length} Selected
+                                    <span className="text-[10px] font-bold text-blue-700 bg-blue-100/90 px-2 py-0.5 rounded-md shrink-0">
+                                      {selectedSubs.length} Capacities
                                     </span>
                                   )}
                                 </div>
                                 {selectedSubs.length > 0 && (
-                                  <div className="mt-1.5 flex flex-wrap gap-1">
+                                  <div className="flex flex-wrap gap-1 pt-1 border-t border-slate-200/60">
                                     {selectedSubs.map((sub) => (
                                       <span
                                         key={sub}
-                                        className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-mono text-slate-700 font-medium"
+                                        className="px-1.5 py-0.5 rounded-md bg-white border border-slate-200 text-[10px] font-mono text-slate-700 font-medium truncate max-w-full"
                                       >
                                         {sub}
                                       </span>
@@ -1344,10 +1349,10 @@ Portal URL    : ${window.location.origin}`;
                             );
                           })
                         ) : (
-                          <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
-                            <span className="flex items-center space-x-1.5">
+                          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between">
+                            <span className="flex items-center space-x-1.5 min-w-0">
                               <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                              <span>No vehicles assigned</span>
+                              <span className="truncate">No vehicles assigned</span>
                             </span>
                             <button
                               type="button"
@@ -1369,7 +1374,7 @@ Portal URL    : ${window.location.origin}`;
                                 setActiveModalTab('vehicles');
                                 setShowForm(true);
                               }}
-                              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer"
+                              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer shrink-0 ml-2"
                             >
                               Configure
                             </button>
@@ -1378,27 +1383,31 @@ Portal URL    : ${window.location.origin}`;
                       </div>
                     </div>
 
-                    {/* Security Status & Access Copy Box */}
-                    <div className="mt-3 p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
-                      <div className="flex items-center space-x-1.5 text-slate-600">
-                        {hasPassword ? (
-                          <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        ) : (
-                          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        )}
-                        <span className="text-slate-500 text-[11px]">Auth:</span>
-                        <span
-                          className={`font-bold text-[11px] ${
-                            hasPassword ? 'text-emerald-700' : 'text-amber-700'
-                          }`}
-                        >
-                          {hasPassword ? 'Encrypted Password Active' : 'Not set — Edit to Assign'}
-                        </span>
+                    {/* Security Status & Access Copy Box (Immune to overflow) */}
+                    <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-200/80 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 text-xs">
+                      <div className="flex items-center space-x-2 min-w-0 flex-1">
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${hasPassword ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {hasPassword ? (
+                            <Lock className="w-3.5 h-3.5" />
+                          ) : (
+                            <AlertCircle className="w-3.5 h-3.5" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider leading-none">Access Status</div>
+                          <div
+                            className={`font-bold text-xs truncate mt-0.5 ${
+                              hasPassword ? 'text-emerald-700' : 'text-amber-700'
+                            }`}
+                          >
+                            {hasPassword ? 'Password Active & Encrypted' : 'Password Not Set'}
+                          </div>
+                        </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => handleCopyCredentials(emp)}
-                        className={`text-xs font-bold px-2.5 py-1 rounded-lg transition flex items-center space-x-1 cursor-pointer border ${
+                        className={`text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5 cursor-pointer border shrink-0 ${
                           isCopied
                             ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                             : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
@@ -1421,14 +1430,14 @@ Portal URL    : ${window.location.origin}`;
                   </div>
 
                   {/* Lead Metrics Footer */}
-                  <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                    <div className="flex items-center space-x-1">
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                    <div className="flex items-center space-x-1.5">
                       <span>Active Leads:</span>
-                      <span className="font-bold text-slate-900 bg-slate-100 px-1.5 py-0.2 rounded font-mono">{activeLeads}</span>
+                      <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md font-mono">{activeLeads}</span>
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <span>Lifetime Leads:</span>
-                      <span className="font-bold text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-mono">{totalLeads}</span>
+                    <div className="flex items-center space-x-1.5">
+                      <span>Total Handled:</span>
+                      <span className="font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md font-mono">{totalLeads}</span>
                     </div>
                   </div>
                 </div>
@@ -1484,7 +1493,7 @@ Portal URL    : ${window.location.origin}`;
               if (e.target === e.currentTarget && !isSaving) setShowForm(false);
             }}
           >
-            <div className="bg-white text-slate-900 border border-slate-200 rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="bg-white text-slate-900 border border-slate-200/90 rounded-2xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[92vh] overflow-hidden animate-in zoom-in-95 duration-150">
               {/* Modal Header */}
               <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70 shrink-0 space-y-3">
                 <div className="flex items-center justify-between">
